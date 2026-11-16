@@ -661,7 +661,7 @@ def write_html(path: Path, people, jobs, skipped):
             f"<td class='num'>{money(p['wages'])}</td>"
             f"<td class='num'>{money(p['reimb'])}</td>"
             f"<td class='num'>{money(p['assurity'])}</td>"
-            f"<td class='num'>{money(p['net'])}</td>"
+            f"<td class='num'>{money(p['net_after_misc'])}</td>"
             f"<td class='{cls}'>{e(st)}</td>"
             "</tr>"
         )
@@ -669,7 +669,7 @@ def write_html(path: Path, people, jobs, skipped):
     <table class="sum">
       <thead><tr>
         <th>Contractor</th><th>WD hrs</th><th>GC hrs</th><th>26-GC</th><th>Rate</th>
-        <th>Wages</th><th>Reimbursements</th><th>Assurity</th><th>Net due</th><th>Vs live site</th>
+        <th>Wages</th><th>Reimbursements</th><th>Assurity</th><th>Net payable</th><th>Vs live now</th>
       </tr></thead>
       <tbody>
         {''.join(rows)}
@@ -682,8 +682,8 @@ def write_html(path: Path, people, jobs, skipped):
           <td class="num">{money(sum_wages)}</td>
           <td class="num">{money(sum_reimb)}</td>
           <td class="num">{money(sum_assur)}</td>
-          <td class="num">{money(sum_net)}</td>
-          <td class="num">{money(live_net)} live</td>
+          <td class="num">{money(sum_after)}</td>
+          <td class="num">was {money(live_net)}</td>
         </tr>
       </tbody>
     </table>
@@ -828,7 +828,7 @@ def write_html(path: Path, people, jobs, skipped):
             f"<td class='num'>{hrs(p['gc26'])} / {live_26}</td>"
             f"<td class='num'>{money(p['wages'])}</td>"
             f"<td class='num'>{money(p.get('weekly_wages'))}</td>"
-            f"<td class='num'>{money(p['net'])}</td>"
+            f"<td class='num'>{money(p['net_after_misc'])}</td>"
             f"<td class='num'>{money(report_net(p))}</td>"
             f"<td>{e(cause_for(p))}</td>"
             "</tr>"
@@ -931,13 +931,12 @@ ul {{ margin: 4px 0 8px 18px; padding: 0; }}
 <div class="banner">TEST ONLY · DO NOT MERGE · DO NOT DEPLOY · Week stops Sunday 11/8/2026. Nothing here changes the live site.</div>
 <div class="cover">
 <h1>Noble Field Ledger — test review, 11/2/2026 through 11/8/2026</h1>
-<p class="sub">Noble General Contracting (GC) and Noble Windows &amp; Doors (WD). Recomputed from the ClockShark export and set next to the live site for this week. Not a payment.</p>
-<p>Each punch is converted on its own leftover minutes (00–05 = .0, 06–11 = .1, 12–17 = .2, 18–23 = .3, 24–29 = .4, 30–35 = .5, 36–41 = .6, 42–47 = .7, 48–53 = .8, 54–59 = .9), then those tenths are added. Job totals and the week are not converted again. 26-GC hours sit inside GC. Net due = wages + reimbursements − Assurity. No income tax. Matthew Laush (Lausch) is $50.00 an hour with no Assurity.</p>
-<p>The live page for this week stores the same 145 punches and the same net minutes. Its paid hours are not those tenths. From 11/2/2026 on, the page pays round(all net minutes ÷ 60, 1), half up, then reconciles WD, GC, and 26-GC to that week. That is the whole hour gap. The weekly direct-deposit sheet matches those live paid hours.</p>
-<p><b>Pay matches the live site for {e(', '.join(p['name'] for p in matches) or 'no one')}.</b> Kevin Hollenbeck is $0 on both sides (inactive from 11/2/2026). {len(differs)} contractors differ on hours or net. {e(', '.join(p['name'] for p in no_rate) or 'No one')} has hours and no rate on file.</p>
+<p class="sub">Noble General Contracting (GC) and Noble Windows &amp; Doors (WD). Kelly’s decision on 11/16/2026: from the 11/2/2026 week onward, paid hours are per-punch tenths. This branch prepares that change. Not a payment. Still do not merge.</p>
+<p>Each punch is converted on its own leftover minutes (00–05 = .0, 06–11 = .1, 12–17 = .2, 18–23 = .3, 24–29 = .4, 30–35 = .5, 36–41 = .6, 42–47 = .7, 48–53 = .8, 54–59 = .9), then those tenths are added. Job totals and the week are not converted again, and job lines are not reconciled up to a weekly total. 26-GC hours sit inside GC. Net payable = wages + reimbursements − Assurity − a preserved misc. deduction. No income tax. Matthew Laush (Lausch) is $50.00 an hour with no Assurity.</p>
+<p>Before is the live page today (weekly rounding). After is this branch (per-punch tenths, hand fixes kept). The 145 punches and their net minutes are the same. {len(differs)} contractors change. {e(', '.join(p['name'] for p in matches) or 'No one')} already matched, so their pay does not move. Kevin Hollenbeck stays $0 (inactive from 11/2/2026). {e(', '.join(p['name'] for p in no_rate) or 'No one')} still has no rate on file.</p>
 {summary_table}
-<p class="note">Reimbursements = mileage + fuel stipend + additional payments. Assurity is withheld once, and only where the live page has a premium. Cody McClary’s premium is terminated (10/23/2026) and Marco Garcia is ineligible (under 90 days), so nothing is withheld for them. Daniel Smalley’s $310.45 trim is a separate misc. deduction: net due above does not subtract it; net after that deduction is {money(sum_after)}. Paid wages here {money(sum_wages)} versus live-site wages {money(live_wages)}. All-contractor hours including unpaid: WD {sum_wd:.1f}, GC {sum_gc:.1f}, of which 26-GC {sum_26:.1f}. George Piekarski’s hours are in the all-contractor GC figure and not in the paid total.</p>
-<p class="note">A 0:01 punch is 0.0 and is listed. Three 0:00 punches are skipped. No Missing Clock In row and no Out Of Bounds / GPSFence label is in this export. The live week header says 144 punches counted; the stored punch lists add to 145, the same 145 used here. Nothing from 11/9/2026–11/15/2026 is included.</p>
+<p class="note">Reimbursements = mileage + fuel stipend + additional payments ({money(sum_reimb)}). Assurity {money(sum_assur)} is withheld once, and only where a premium is already on file. Cody McClary’s premium is terminated (10/23/2026) and Marco Garcia is ineligible (under 90 days), so nothing is withheld for them. Daniel Smalley’s $310.45 WD trim is kept and is inside net payable. After wages {money(sum_wages)}. Before wages {money(live_wages)}. After net payable {money(sum_after)}. Before net payable {money(live_net)}. All-contractor hours including unpaid: WD {sum_wd:.1f}, GC {sum_gc:.1f}, of which 26-GC {sum_26:.1f}.</p>
+<p class="note">No other stored pay week was edited. The archive’s last week is 11/2/2026–11/8/2026, so there is no 11/9/2026–11/15/2026 week to leave alone. Weeks through 11/1/2026 stay on their current hours, including Marco Garcia’s weekly category conversion for those earlier weeks. An annual statement that includes 11/2/2026 will pick up this week’s new hours and wages. A 0:01 punch is 0.0 and is listed. Three 0:00 punches are skipped.</p>
 </div>
 <h2>Contractor detail</h2>
 {''.join(details)}
@@ -952,10 +951,10 @@ ul {{ margin: 4px 0 8px 18px; padding: 0; }}
 </tbody></table>
 </section>
 <section class="person">
-<h2>Differences vs the live site</h2>
-<p>Live numbers are the hours, wages, and payable net stored on the live page for 11/2/2026–11/8/2026. Every punch’s contractor, clock-in, and net minutes matches. The gaps below are the hour rule, Daniel’s trim, and one hand-edited job name.</p>
+<h2>Before and after, 11/2/2026–11/8/2026</h2>
+<p>Before is the live page today. After is this branch: per-punch tenths, with the hand fixes kept (Daniel’s trim, Angel’s additional payments, Rex’s Rita Heneghan job name, Assurity, Christian’s flat week, fuel stipends, mileage). Payable is wages + reimbursements − Assurity − the trim.</p>
 <table>
-<thead><tr><th>Contractor</th><th>This review WD / GC</th><th>Live site WD / GC</th><th>26-GC this / live</th><th>This wages</th><th>Live wages</th><th>This net due</th><th>Live payable</th><th>Likely cause</th></tr></thead>
+<thead><tr><th>Contractor</th><th>After WD / GC</th><th>Before WD / GC</th><th>26-GC after / before</th><th>After wages</th><th>Before wages</th><th>After payable</th><th>Before payable</th><th>What changed</th></tr></thead>
 <tbody>
 {''.join(diff_rows)}
 </tbody></table>
@@ -969,7 +968,7 @@ ul {{ margin: 4px 0 8px 18px; padding: 0; }}
 </section>
 <section class="person">
 <h2>What a rebuild would overwrite</h2>
-<p>The attached <code>build_archive.py</code> was not run. It writes a full archive, not this review. If it were pointed at the live data and run, this is what it would change for 11/2/2026–11/8/2026. It also rebuilds every earlier week in its source file.</p>
+<p>This branch changes the ledger directly. <code>build_archive.py</code> was not run. If that script were run later, it would put weekly rounding back and would drop the hand fixes below. It also rebuilds every earlier week in its source file.</p>
 <ul>
 <li><b>Paid hours.</b> It would replace per-punch tenth sums with round(all net minutes ÷ 60, 1), half up, and reconcile WD and GC to that week. That matches the live site’s paid hours. It would undo a hand edit that had put the tenth-band totals back onto a contractor.</li>
 <li><b>Job lines.</b> It stores round(each punch ÷ 60, 1) on the punch, which does not add up to the weekly paid total. The live page reconciles job lines to the company subtotal. A rebuild would drop that reconciliation.</li>
