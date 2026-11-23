@@ -110,6 +110,34 @@ def q2(x):
     return float(Decimal(str(x)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
+def q1(x):
+    return float(Decimal(str(x)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP))
+
+
+def company_wages(wd_hours, gc_hours, rate, wages):
+    """WD hours times the rate, and GC hours times the same rate.
+
+    Combined wages stay as they are. The two company amounts add up to them.
+    """
+    if wages is None:
+        return None, None
+    wd_wages = q2(wd_hours * rate)
+    gc_wages = q2(gc_hours * rate)
+    drift = q2(wages - (wd_wages + gc_wages))
+    if drift:
+        if gc_hours and not wd_hours:
+            gc_wages = q2(gc_wages + drift)
+        elif wd_hours and not gc_hours:
+            wd_wages = q2(wd_wages + drift)
+        elif gc_hours >= wd_hours:
+            gc_wages = q2(gc_wages + drift)
+        else:
+            wd_wages = q2(wd_wages + drift)
+    if abs((wd_wages + gc_wages) - wages) > 0.001:
+        raise SystemExit(f"company wages {wd_wages} + {gc_wages} != {wages}")
+    return wd_wages, gc_wages
+
+
 def hm(minutes):
     return minutes // 60 * 10 + (minutes % 60) // 6
 
@@ -457,6 +485,7 @@ def rollup(punches, trips, note_bonus_amounts, note_bonus_evidence):
     for name in sorted(on_sheet):
         ps = by.get(name, [])
         if name == "Christian Ellis Blank":
+            wd_wages, gc_wages = company_wages(0.0, 40.0, 43.75, 1750.0)
             people.append(
                 {
                     "name": name,
@@ -467,6 +496,8 @@ def rollup(punches, trips, note_bonus_amounts, note_bonus_evidence):
                     "hours": 40.0,
                     "raw": "flat 40:00",
                     "rate": 43.75,
+                    "wd_wages": wd_wages,
+                    "gc_wages": gc_wages,
                     "wages": 1750.0,
                     "fuel": 0.0,
                     "mileage": 0.0,
@@ -489,8 +520,11 @@ def rollup(punches, trips, note_bonus_amounts, note_bonus_evidence):
         g26_u = sum(p["units"] for p in paid if p["gc26"])
         raw_m = sum(p["minutes"] for p in ps)
         rate = None if name in skip_pay else RATES.get(name)
+        wd_hours = None if name in skip_pay else wd_u / 10
+        gc_hours = None if name in skip_pay else gc_u / 10
         hours = None if name in skip_pay else (wd_u + gc_u) / 10
         wages = None if name in skip_pay or rate is None else q2(hours * rate)
+        wd_wages, gc_wages = company_wages(wd_hours, gc_hours, rate, wages)
         own = [t for t in trips if t["name"] == name]
         miles = sum(t["miles"] or 0 for t in own)
         mileage_amt = q2(sum(t["amount"] or 0 for t in own))
@@ -517,12 +551,14 @@ def rollup(punches, trips, note_bonus_amounts, note_bonus_evidence):
             {
                 "name": name,
                 "punches": ps,
-                "wd": None if name in skip_pay else wd_u / 10,
-                "gc": None if name in skip_pay else gc_u / 10,
+                "wd": wd_hours,
+                "gc": gc_hours,
                 "gc26": None if name in skip_pay else g26_u / 10,
                 "hours": hours,
                 "raw": f"{raw_m // 60}:{raw_m % 60:02d}",
                 "rate": rate,
+                "wd_wages": wd_wages,
+                "gc_wages": gc_wages,
                 "wages": wages,
                 "fuel": fuel,
                 "mileage": mileage_amt,
@@ -582,6 +618,8 @@ def additional_pay(punches):
             "raw": raw,
             "raw_display": raw_display,
             "rate": rate,
+            "wd_wages": None,
+            "gc_wages": None,
             "wages": wages,
             "fuel": 0.0,
             "mileage": 0.0,
@@ -725,11 +763,44 @@ def main():
         raise SystemExit(f"base net moved {prior_net}")
     if abs(sum_net - q2(prior_net + sum_note)) > 0.001:
         raise SystemExit(f"net {sum_net} != {prior_net} + note bonus {sum_note}")
+    if abs(sum_net - 27155.74) > 0.001:
+        raise SystemExit(f"net payable changed {sum_net}")
+    for p in clock:
+        if p["gc26"] - p["gc"] > 0.001:
+            raise SystemExit(f"{p['name']} 26-GC {p['gc26']} is outside GC {p['gc']}")
+    sum_wd_hours = q1(sum((Decimal(str(p["wd"])) for p in clock), Decimal("0")))
+    sum_gc_hours = q1(sum((Decimal(str(p["gc"])) for p in clock), Decimal("0")))
+    sum_gc26_hours = q1(sum((Decimal(str(p["gc26"])) for p in clock), Decimal("0")))
+    sum_wd_wages = q2(sum(p["wd_wages"] for p in clock))
+    sum_gc_wages = q2(sum(p["gc_wages"] for p in clock))
+    if abs((sum_wd_wages + sum_gc_wages) - sum_wages) > 0.001:
+        raise SystemExit(
+            f"company wages {sum_wd_wages} + {sum_gc_wages} != wages {sum_wages}"
+        )
+    if sum_gc26_hours - sum_gc_hours > 0.001:
+        raise SystemExit(f"26-GC {sum_gc26_hours} is outside GC {sum_gc_hours}")
+    george = next(p for p in people if p["name"] == "George Piekarski")
+    if george["wages"] is not None or george["wd"] is not None or george.get("wd_wages"):
+        raise SystemExit("George Piekarski is in a company total")
+    for p in additional:
+        if p["wd"] is not None or p.get("wd_wages") or p.get("gc_wages"):
+            raise SystemExit(f"{p['name']} was assigned to WD or GC")
+    nicholas = next(p for p in people if p["name"] == "Nicholas Sturgeon")
+    joe = next(p for p in people if p["name"] == "Joe Orona")
+    if nicholas["note_bonus"] != 150 or abs(nicholas["net"] - 2467.36) > 0.001:
+        raise SystemExit(f"Nicholas note bonus changed {nicholas['note_bonus']} {nicholas['net']}")
+    if joe["note_bonus"] != 100 or abs(joe["net"] - 1822.40) > 0.001:
+        raise SystemExit(f"Joe note bonus changed {joe['note_bonus']} {joe['net']}")
     print(
         f"punches {len(punches)} wages {sum_wages:.2f} reimb {sum_reimb:.2f} "
         f"bonus {sum_bonus:.2f} ({len(recipients)}) note {sum_note:.2f} "
         f"additional {sum_additional:.2f} "
         f"assurity {sum_assur:.2f} clock net {sum_clock_net:.2f} net {sum_net:.2f}"
+    )
+    print(
+        f"WD hours {sum_wd_hours:.1f} wages {sum_wd_wages:.2f} "
+        f"GC hours {sum_gc_hours:.1f} wages {sum_gc_wages:.2f} "
+        f"26-GC hours {sum_gc26_hours:.1f}"
     )
     print("bonus recipients:", ", ".join(recipients))
     for name in ("Nicholas Sturgeon", "Joe Orona"):
@@ -742,8 +813,10 @@ def main():
             g26 = "—" if p["gc26"] is None else f"{p['gc26']:5.1f}"
             bonus_s = "—" if p["bonus"] is None else f"{p['bonus']:.2f}"
             note_s = "—" if p["note_bonus"] is None else f"{p['note_bonus']:.2f}"
+            wd_pay = "—" if p.get("wd_wages") is None else f"{p['wd_wages']:.2f}"
+            gc_pay = "—" if p.get("gc_wages") is None else f"{p['gc_wages']:.2f}"
             print(
-                f"{p['name']:24} raw {p['raw']:>7} WD {wd} GC {gc} 26 {g26} "
+                f"{p['name']:24} raw {p['raw']:>7} WD {wd} ${wd_pay} GC {gc} ${gc_pay} 26 {g26} "
                 f"wages {p['wages']} reimb {p['reimb']:.2f} bonus {bonus_s} "
                 f"note {note_s} ass {p['assurity']:.2f} net {p['net']}"
             )
@@ -753,35 +826,43 @@ def main():
     # Write CSV and HTML.
     OUT.mkdir(exist_ok=True)
     csv_path = OUT / "week-2026-11-16.csv"
+    csv_columns = [
+        "section",
+        "contractor",
+        "day",
+        "in",
+        "out",
+        "raw",
+        "tenth",
+        "job",
+        "bucket",
+        "is_26gc",
+        "wd",
+        "wd_wages",
+        "gc",
+        "gc_wages",
+        "gc26",
+        "rate",
+        "wages",
+        "mileage",
+        "fuel",
+        "reimbursements",
+        "thanksgiving_bonus",
+        "note_bonus",
+        "assurity",
+        "net_payable",
+        "notes",
+    ]
+
+    def csv_row(values):
+        extra = set(values) - set(csv_columns)
+        if extra:
+            raise SystemExit(f"unknown csv fields {sorted(extra)}")
+        return [values.get(column, "") for column in csv_columns]
+
     with csv_path.open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(
-            [
-                "section",
-                "contractor",
-                "day",
-                "in",
-                "out",
-                "raw",
-                "tenth",
-                "job",
-                "bucket",
-                "is_26gc",
-                "wd",
-                "gc",
-                "gc26",
-                "rate",
-                "wages",
-                "mileage",
-                "fuel",
-                "reimbursements",
-                "thanksgiving_bonus",
-                "note_bonus",
-                "assurity",
-                "net_payable",
-                "notes",
-            ]
-        )
+        w.writerow(csv_columns)
         for p in people:
             evidence = p.get("note_bonus_evidence") or []
             summary_notes = p["note"]
@@ -806,7 +887,9 @@ def main():
                     p.get("bucket", ""),
                     "",
                     "" if p["wd"] is None else f"{p['wd']:.1f}",
+                    "" if p.get("wd_wages") is None else f"{p['wd_wages']:.2f}",
                     "" if p["gc"] is None else f"{p['gc']:.1f}",
+                    "" if p.get("gc_wages") is None else f"{p['gc_wages']:.2f}",
                     "" if p["gc26"] is None else f"{p['gc26']:.1f}",
                     "" if p["rate"] is None else f"{p['rate']:.2f}",
                     "" if p["wages"] is None else f"{p['wages']:.2f}",
@@ -820,6 +903,70 @@ def main():
                     summary_notes,
                 ]
             )
+        company_note = (
+            "Company wages only. Thanksgiving bonus, note bonus, reimbursements, "
+            "and Assurity are week totals and are not included. "
+            "26-GC hours are inside GC and are not added again. "
+            "George Piekarski is not included. Paulina and Esias stay additional."
+        )
+        w.writerow(
+            [
+                "company",
+                "WD",
+                "",
+                "",
+                "",
+                "",
+                f"{sum_wd_hours:.1f}",
+                "",
+                "WD",
+                "",
+                f"{sum_wd_hours:.1f}",
+                f"{sum_wd_wages:.2f}",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                company_note,
+            ]
+        )
+        w.writerow(
+            [
+                "company",
+                "GC",
+                "",
+                "",
+                "",
+                "",
+                f"{sum_gc_hours:.1f}",
+                "",
+                "GC",
+                "",
+                "",
+                "",
+                f"{sum_gc_hours:.1f}",
+                f"{sum_gc_wages:.2f}",
+                f"{sum_gc26_hours:.1f}",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                company_note,
+            ]
+        )
         for p in people:
             for punch in p["punches"]:
                 w.writerow(
@@ -845,6 +992,8 @@ def main():
                         "",
                         "",
                         "",
+                        "",
+                        "",
                         "excluded" if punch["exclude"] else "",
                         " ".join(punch["flags"] + ([punch["note"]] if punch["note"] else [])),
                     ]
@@ -859,7 +1008,9 @@ def main():
             f"<td>{e(p['name'])}{tag}</td>"
             f"<td class='num'>{e(p.get('raw_display') or p['raw'])}</td>"
             f"<td class='num'>{'—' if p['wd'] is None else format(p['wd'], '.1f')}</td>"
+            f"<td class='num'>{money(p.get('wd_wages'))}</td>"
             f"<td class='num'>{'—' if p['gc'] is None else format(p['gc'], '.1f')}</td>"
+            f"<td class='num'>{money(p.get('gc_wages'))}</td>"
             f"<td class='num'>{'—' if p['gc26'] is None else format(p['gc26'], '.1f')}</td>"
             f"<td class='num'>{money(p['rate']) if p['rate'] is not None else '—'}</td>"
             f"<td class='num'>{money(p['wages'])}</td>"
@@ -972,7 +1123,8 @@ def main():
                 "Pay is not calculated."
                 if p["missing_rate"]
                 else (
-                    f"WD {p['wd']:.1f} · GC {p['gc']:.1f} · 26-GC {p['gc26']:.1f} · "
+                    f"WD {p['wd']:.1f} · WD wages {money(p['wd_wages'])} · "
+                    f"GC {p['gc']:.1f} · GC wages {money(p['gc_wages'])} · 26-GC {p['gc26']:.1f} · "
                     f"rate {money(p['rate']) if p['rate'] is not None else '—'} · wages {money(p['wages'])} · "
                     f"reimbursements {money(p['reimb'])} · Thanksgiving bonus {money(p['bonus'])} · "
                     f"Note bonus {money(p['note_bonus'])} · "
@@ -1038,15 +1190,24 @@ ul {{ margin: 4px 0 8px 18px; }}
 <p>Note bonus is the amount a contractor wrote on a punch, paid as its own line. It is not the Thanksgiving bonus and it is not wages. Nicholas Sturgeon {money(note_bonus_amounts['Nicholas Sturgeon'])} from his {e(note_bonus_evidence['Nicholas Sturgeon'][0]['date'])} note. Joe Orona {money(note_bonus_amounts['Joe Orona'])} from his {e(note_bonus_evidence['Joe Orona'][0]['date'])} note. Every other calculated contractor is $0.00. George Piekarski, Nicholas Sommer, Exceptional Cleaning Services/Paulina Moya, and Angel Soto - Helper Esias do not receive a note bonus.</p>
 <p>Additional lines, each on its own row after Angel Soto Moya, bucket additional, not WD and not GC. Exceptional Cleaning Services/Paulina Moya: raw 4:34 converted to 4.5 at $35.00 = {money(extras[0]['wages'])}. Angel Soto - Helper Esias: 20.7 hours, already converted, at $15.00 = {money(extras[1]['wages'])}. No Assurity, no fuel, no mileage, no Thanksgiving bonus, and no note bonus. Neither amount is in Angel Soto Moya’s hours, wages, or net.</p>
 <p><b>Wages {money(sum_wages)}. Reimbursements {money(sum_reimb)}. Thanksgiving bonus {money(sum_bonus)}. Note bonus {money(sum_note)}. Additional lines {money(sum_additional)}. Assurity {money(sum_assur)}. Net payable {money(sum_net)}.</b> Net payable = {money(sum_wages)} + {money(sum_reimb)} + {money(sum_bonus)} + {money(sum_note)} + {money(extras[0]['wages'])} + {money(extras[1]['wages'])} − {money(sum_assur)} = {money(sum_net)}.</p>
+<p><b>WD total {sum_wd_hours:.1f} hours, {money(sum_wd_wages)}. GC total {sum_gc_hours:.1f} hours, {money(sum_gc_wages)}.</b> Of the GC hours, {sum_gc26_hours:.1f} are 26-GC. Those hours are already inside GC and are not added again. Thanksgiving bonus, note bonus, reimbursements, and Assurity stay week totals and are not company wages.</p>
 <table>
-<thead><tr><th>Contractor</th><th>Raw</th><th>WD</th><th>GC</th><th>26-GC</th><th>Rate</th><th>Wages</th><th>Reimbursements</th><th>Thanksgiving bonus</th><th>Note bonus</th><th>Assurity</th><th>Net payable</th></tr></thead>
+<thead><tr><th>Contractor</th><th>Raw</th><th>WD hours</th><th>WD wages</th><th>GC hours</th><th>GC wages</th><th>26-GC</th><th>Rate</th><th>Wages</th><th>Reimbursements</th><th>Thanksgiving bonus</th><th>Note bonus</th><th>Assurity</th><th>Net payable</th></tr></thead>
 <tbody>
 {''.join(rows)}
-<tr class="total"><td>Week total</td><td></td><td></td><td></td><td></td><td></td><td class="num">{money(sum_wages)}</td><td class="num">{money(sum_reimb)}</td><td class="num">{money(sum_bonus)}</td><td class="num">{money(sum_note)}</td><td class="num">{money(sum_assur)}</td><td class="num">{money(sum_net)}</td></tr>
+<tr class="total"><td>Week total</td><td></td><td class="num">{sum_wd_hours:.1f}</td><td class="num">{money(sum_wd_wages)}</td><td class="num">{sum_gc_hours:.1f}</td><td class="num">{money(sum_gc_wages)}</td><td class="num">{sum_gc26_hours:.1f}</td><td></td><td class="num">{money(sum_wages)}</td><td class="num">{money(sum_reimb)}</td><td class="num">{money(sum_bonus)}</td><td class="num">{money(sum_note)}</td><td class="num">{money(sum_assur)}</td><td class="num">{money(sum_net)}</td></tr>
+</tbody></table>
+<table>
+<thead><tr><th>Company</th><th>Hours</th><th>Wages</th><th>26-GC hours</th></tr></thead>
+<tbody>
+<tr><td>WD · Noble Windows &amp; Doors</td><td class="num">{sum_wd_hours:.1f}</td><td class="num">{money(sum_wd_wages)}</td><td class="num">—</td></tr>
+<tr><td>GC · Noble General Contracting</td><td class="num">{sum_gc_hours:.1f}</td><td class="num">{money(sum_gc_wages)}</td><td class="num">{sum_gc26_hours:.1f}</td></tr>
+<tr class="total"><td>ClockShark wages</td><td></td><td class="num">{money(sum_wages)}</td><td>26-GC is inside the GC hours above.</td></tr>
 </tbody></table>
 <h2>Read these before the detail</h2>
 <ul>
-<li>George Piekarski and Nicholas Sommer are not calculated. George’s 73:45 stays on his timesheet with the job-detail notes, including the 20:12 punch, the 0:23 punch, the 23:00 punch, and the 11:27 overnight punch. Nicholas Sommer has no punches.</li>
+<li>George Piekarski and Nicholas Sommer are not calculated. George’s 73:45 stays on his timesheet with the job-detail notes, including the 20:12 punch, the 0:23 punch, the 23:00 punch, and the 11:27 overnight punch. Those hours are in neither the WD total nor the GC total. Nicholas Sommer has no punches and is not on this review.</li>
+<li>WD wages are WD hours times that contractor’s rate. GC wages are GC hours times the same rate. Combined wages equal WD wages plus GC wages. 26-GC hours are inside GC.</li>
 <li>A customer price in a note ($85 an hour, a $275 trip) is not a pay rate.</li>
 <li>Brecken Bogle’s 3:54 on Tony Arnold is left out of pay. He wrote that the homeowner paid cash.</li>
 <li>Notes that ask for a bonus are included as their own lines, separate from the Thanksgiving bonus: Nicholas Sturgeon {money(note_bonus_amounts['Nicholas Sturgeon'])}, Joe Orona {money(note_bonus_amounts['Joe Orona'])}. Those amounts are in each contractor’s net. Angel Soto Moya’s 11/19/2026 note on the 4:34 cleaning punch says Paulina $35hr. That pay is the additional line for Exceptional Cleaning Services/Paulina Moya, raw 4:34 converted to 4.5 at $35.00, $157.50. Angel Soto - Helper Esias is 20.7 hours at $15.00, $310.50. Both are separate lines and are not in Angel’s net.</li>
