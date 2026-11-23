@@ -56,7 +56,9 @@ ASSURITY_NOTE = {
     "Marco Garcia": "Ineligible (under 90 days). Nothing withheld.",
     "Matthew Laush": "No Assurity.",
 }
-FUEL = {"Andy Gomez": 50.0, "Jose Carranza": 50.0}
+# Jose Carranza's $50 was a one-time stipend for the distance of that project.
+# It is not paid on this week. Andy Gomez's stipend stays.
+FUEL = {"Andy Gomez": 50.0}
 # This week only. A separate amount, not wages and not a reimbursement.
 # George Piekarski has no rate, so his wages stay None and he does not receive it.
 # Nicholas Sommer is not on this review.
@@ -755,7 +757,7 @@ def main():
             )
     if (
         abs(sum_wages - 24127.80) > 0.001
-        or abs(sum_reimb - 632.76) > 0.001
+        or abs(sum_reimb - 582.76) > 0.001
         or abs(sum_bonus - 1900.00) > 0.001
         or abs(sum_additional - 468.00) > 0.001
         or abs(sum_assur - 395.32) > 0.001
@@ -765,11 +767,11 @@ def main():
             f"additional {sum_additional} assurity {sum_assur}"
         )
     prior_net = q2(sum_wages + sum_reimb + sum_bonus + sum_additional - sum_assur)
-    if abs(prior_net - 26733.24) > 0.001:
+    if abs(prior_net - 26683.24) > 0.001:
         raise SystemExit(f"base net moved {prior_net}")
     if abs(sum_net - q2(prior_net + sum_note)) > 0.001:
         raise SystemExit(f"net {sum_net} != {prior_net} + note bonus {sum_note}")
-    if abs(sum_net - 26983.24) > 0.001:
+    if abs(sum_net - 26933.24) > 0.001:
         raise SystemExit(f"net payable changed {sum_net}")
     for p in clock:
         if p["gc26"] - p["gc"] > 0.001:
@@ -826,14 +828,18 @@ def main():
         or abs(jose["gc"] - 28.3) > 0.001
         or abs(jose["gc26"] - 28.3) > 0.001
         or abs(jose["wages"] - 707.50) > 0.001
-        or jose["fuel"] != 50.0
+        or jose["fuel"] != 0.0
+        or jose["reimb"] != 0.0
         or jose["bonus"] != THANKSGIVING_BONUS
         or jose["note_bonus"] != 0.0
-        or abs(jose["net"] - 857.50) > 0.001
+        or abs(jose["net"] - 807.50) > 0.001
     ):
         raise SystemExit(
             f"Jose pay changed WD {jose['wd']} GC {jose['gc']} wages {jose['wages']} net {jose['net']}"
         )
+    andy = next(p for p in people if p["name"] == "Andy Gomez")
+    if andy["fuel"] != 50.0 or abs(andy["reimb"] - 50.0) > 0.001:
+        raise SystemExit(f"Andy Gomez fuel changed {andy['fuel']} {andy['reimb']}")
     print(
         f"punches {len(punches)} wages {sum_wages:.2f} reimb {sum_reimb:.2f} "
         f"bonus {sum_bonus:.2f} ({len(recipients)}) note {sum_note:.2f} "
@@ -1255,7 +1261,7 @@ ul {{ margin: 4px 0 8px 18px; }}
 <li>George Piekarski and Nicholas Sommer are not calculated. George’s 73:45 stays on his timesheet with the job-detail notes, including the 20:12 punch, the 0:23 punch, the 23:00 punch, and the 11:27 overnight punch. Those hours are in neither the WD total nor the GC total. Nicholas Sommer has no punches and is not on this review.</li>
 <li>WD wages are WD hours times that contractor’s rate. GC wages are GC hours times the same rate. Combined wages equal WD wages plus GC wages. 26-GC hours are inside GC.</li>
 <li>A customer price in a note ($85 an hour, a $275 trip) is not a pay rate.</li>
-<li>Brecken Bogle’s 3:54 on Tony Arnold is left out of pay. He wrote that the homeowner paid cash. Jose Carranza’s 6:55 on 11/20/2026 on Tony Arnold is left out of pay. Kelly said the homeowner paid cash.</li>
+<li>Brecken Bogle’s 3:54 on Tony Arnold is left out of pay. He wrote that the homeowner paid cash. Jose Carranza’s 6:55 on 11/20/2026 on Tony Arnold is left out of pay. Kelly said the homeowner paid cash. Jose Carranza’s $50 fuel stipend was a one-time stipend for the distance of that project and is not paid this week. Andy Gomez’s $50 fuel stipend stays.</li>
 <li>Notes that ask for a bonus are included as their own lines, separate from the Thanksgiving bonus: Nicholas Sturgeon {money(note_bonus_amounts['Nicholas Sturgeon'])}, Joe Orona {money(note_bonus_amounts['Joe Orona'])}. Those amounts are in each contractor’s net. Angel Soto Moya’s 11/19/2026 note on the 4:34 cleaning punch says Paulina $35hr. That pay is the additional line for Exceptional Cleaning Services/Paulina Moya, raw 4:34 converted to 4.5 at $35.00, $157.50. Angel Soto - Helper Esias is 20.7 hours at $15.00, $310.50. Both are separate lines and are not in Angel’s net.</li>
 <li>26-WS on Andrew Kelley is WD. It is an active Windows &amp; Doors project. Shaw Butte is WD.</li>
 <li>Eric Havins is all WD, including Noble Office. Noble W&amp;D shop time is WD. 26-KB (Mark Kampf) stays GC.</li>
