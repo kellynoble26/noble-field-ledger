@@ -27,7 +27,6 @@ RATES = {
     "Angel Soto Moya": 42.0,
     "Brandon Hermaszewski": 35.0,
     "Brecken Bogle": 18.0,
-    "Cody McClary": 38.0,
     "Daniel Smalley": 45.0,
     "Eric Havins": 40.0,
     "Jacob Jones": 28.0,
@@ -54,11 +53,10 @@ ASSURITY = {
     "Kelly Renner": 72.45,
 }
 ASSURITY_NOTE = {
-    "Cody McClary": "Assurity terminated 10/23/2026. Nothing withheld.",
     "Marco Garcia": "Ineligible (under 90 days). Nothing withheld.",
     "Matthew Laush": "No Assurity.",
 }
-FUEL = {"Andy Gomez": 50.0, "Cody McClary": 50.0, "Jose Carranza": 50.0}
+FUEL = {"Andy Gomez": 50.0, "Jose Carranza": 50.0}
 ALWAYS_WD = {"Eric Havins"}
 WD_RE = re.compile(
     r"26\s*-\s*WD|WD\s*-\s*26|W\s*/\s*D|Noble\s+W\s*&\s*D|Noble\s+Windows\s*&\s*Doors",
@@ -398,7 +396,6 @@ def rollup(punches, trips):
     # Only people on this week's timesheet, plus salary/stipend rules and the no-rate name.
     on_sheet = set(SHEET) | {
         "Christian Ellis Blank",
-        "Cody McClary",
         "Matthew Laush",
         "Nicholas Sommer",
     }
@@ -440,15 +437,11 @@ def rollup(punches, trips):
         own = [t for t in trips if t["name"] == name]
         miles = sum(t["miles"] or 0 for t in own)
         mileage_amt = q2(sum(t["amount"] or 0 for t in own))
-        fuel = FUEL.get(name, 0.0) if (ps or name in FUEL) else 0.0
-        if name == "Cody McClary":
-            fuel = 50.0
+        fuel = FUEL.get(name, 0.0) if ps else 0.0
         reimb = q2(mileage_amt + fuel)
         ass = ASSURITY.get(name, 0.0) if wages else 0.0
         net = q2(wages + reimb - ass) if wages is not None else None
         note = ASSURITY_NOTE.get(name, "")
-        if name == "Cody McClary" and not ps:
-            note = "No punches. $50 fuel stipend still on the standing rule. " + note
         if name == "Matthew Laush" and not ps:
             note = "On the timesheet at 0:00. No punches."
         if name == "Nicholas Sommer":
@@ -746,7 +739,7 @@ ul {{ margin: 4px 0 8px 18px; }}
 <li>Notes that ask for a bonus are not in the net: Nicholas Sturgeon $150, Joe Orona $100. Angel Soto Moya’s note says “Paulina $35hr” on a 4:34 cleaning punch and does not give hours. Nothing was added for that.</li>
 <li>26-WS (Andrew Kelley door modification) is not 26-WD, so those hours are GC. Shaw Butte says “W&amp;D” and does not carry a 26-WD or W/D tag, so it is GC.</li>
 <li>Eric Havins is all WD, including Noble Office. Noble W&amp;D shop time is WD. 26-KB (Mark Kampf) is GC.</li>
-<li>Christian Ellis Blank has no punches. The standing rule is still flat 40 GC hours, $1,750.00. Cody McClary has no punches. The standing rule is still a $50 fuel stipend. Matthew Laush and Nicholas Sommer are on the timesheet at 0:00.</li>
+<li>Christian Ellis Blank has no punches. The standing rule is still flat 40 GC hours, $1,750.00. Matthew Laush and Nicholas Sommer are on the timesheet at 0:00.</li>
 <li>Tony Madalena ($36) and George Rosario ($35) have rates on file. No Assurity premium for them appears on the 11/2 week record, so nothing is withheld. Kelly can confirm.</li>
 <li>Weeks 11/2/2026–11/8/2026 and 11/9/2026–11/15/2026 were not changed. This week is not written into the live ledger.</li>
 </ul>
