@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# future weeks use review/pay-week-template.md
 # Assurity is always a deduction. Net payable = wages + fuel/mileage/reimbursement + Thanksgiving bonus + piecework bonus + additional lines − Assurity. Never add Assurity to net. This applies to every contractor and to the week total. A contractor with no Assurity stays at $0. Matthew Laush has no Assurity. Do not invent an Assurity amount. Show every Assurity amount as a minus. Do not leave a positive Assurity figure that a reader could add into the net. Assurity is only for contractors who are enrolled, not everyone. Fuel/mileage/reimbursement is the header for mileage and fuel. It is not called a reimbursement. Piecework bonus is the header for the amount a contractor wrote on a punch. Thanksgiving bonus stays Thanksgiving bonus.
 # 26-GC hours are GC hours. Do not show them as a separate total, column, or subtotal. They are already inside GC.
 # Eric Havins is always and forever paid by Windows & Doors, including every hour and his Assurity deduction. His Assurity stays inside the WD Assurity cell.
