@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Assurity is always a deduction. Net payable = wages + reimbursements + Thanksgiving bonus + note bonus + additional lines − Assurity. Never add Assurity to net. This applies to every contractor and to the week total. A contractor with no Assurity stays at $0. Matthew Laush has no Assurity. Do not invent an Assurity amount. Show every Assurity amount as a minus. Do not leave a positive Assurity figure that a reader could add into the net.
 # 26-GC hours are GC hours. Do not show them as a separate total, column, or subtotal. They are already inside GC.
 """Test review for pay week 11/16/2026–11/22/2026.
 
@@ -45,6 +46,7 @@ RATES = {
     "Christian Ellis Blank": 43.75,
 }
 # Weekly premiums already on the 11/2 ledger. Not invented.
+# Stored as positive amounts. Always subtracted from net. Never added.
 ASSURITY = {
     "Andy Gomez": 60.49,
     "Angel Soto Moya": 106.39,
@@ -107,6 +109,26 @@ def money(n):
         return "—"
     sign = "-" if n < 0 else ""
     return f"{sign}${abs(n):,.2f}"
+
+
+def deduction(amount):
+    """Show a stored Assurity premium as a deduction. Zero stays $0.00.
+
+    The stored amount stays positive and is subtracted in the net. The page
+    and the CSV show that same amount as a minus so it is not added into pay.
+    """
+    if amount is None:
+        return "—"
+    if not amount:
+        return money(0)
+    return money(-abs(amount))
+
+
+def deduction_csv(amount):
+    """CSV form of an Assurity deduction. Zero stays 0.00."""
+    if not amount:
+        return "0.00"
+    return f"-{abs(amount):.2f}"
 
 
 def q2(x):
@@ -552,7 +574,7 @@ def manual_copy(line, person):
         f"GC hours are {person['gc']:.1f}. "
         f"GC wages are {money(person['gc_wages'])}. "
         f"Net is {money(person['net'])}. "
-        f"Assurity stays {money(person['assurity'])}. "
+        f"Assurity deduction {deduction(person['assurity'])}. "
         f"Thanksgiving bonus stays {money(person['bonus'])}. "
         "No note bonus and no fuel stipend."
     )
@@ -864,6 +886,23 @@ def main():
         raise SystemExit(f"net {sum_net} != {prior_net} + note bonus {sum_note}")
     if abs(sum_net - 27235.68) > 0.001:
         raise SystemExit(f"net payable changed {sum_net}")
+    if "Matthew Laush" in ASSURITY:
+        raise SystemExit("Matthew Laush has no Assurity")
+    matthew = next(p for p in people if p["name"] == "Matthew Laush")
+    if matthew["assurity"] != 0.0:
+        raise SystemExit(f"Matthew Laush Assurity {matthew['assurity']}")
+    for name, amount in ASSURITY.items():
+        person = next(p for p in people if p["name"] == name)
+        if abs(person["assurity"] - amount) > 0.001:
+            raise SystemExit(f"{name} Assurity changed {person['assurity']}")
+        expect = q2(person["wages"] + person["reimb"] + person["bonus"] + person["note_bonus"] - amount)
+        if abs(person["net"] - expect) > 0.001:
+            raise SystemExit(f"{name} net does not subtract Assurity {person['net']} != {expect}")
+    for p in people:
+        if p["name"] not in ASSURITY and p["assurity"]:
+            raise SystemExit(f"{p['name']} was given Assurity {p['assurity']}")
+    if deduction(sum_assur) != "-$395.32":
+        raise SystemExit(f"Assurity deduction display {deduction(sum_assur)}")
     for p in clock:
         if p["gc26"] - p["gc"] > 0.001:
             raise SystemExit(f"{p['name']} 26-GC {p['gc26']} is outside GC {p['gc']}")
@@ -993,7 +1032,7 @@ def main():
         f"punches {len(punches)} wages {sum_wages:.2f} reimb {sum_reimb:.2f} "
         f"bonus {sum_bonus:.2f} ({len(recipients)}) note {sum_note:.2f} "
         f"additional {sum_additional:.2f} "
-        f"assurity {sum_assur:.2f} clock net {sum_clock_net:.2f} net {sum_net:.2f}"
+        f"assurity deduction {deduction(sum_assur)} clock net {sum_clock_net:.2f} net {sum_net:.2f}"
     )
     print(
         f"WD hours {sum_wd_hours:.1f} wages {sum_wd_wages:.2f} "
@@ -1015,7 +1054,7 @@ def main():
             print(
                 f"{p['name']:24} raw {p['raw']:>7} WD {wd} ${wd_pay} GC {gc} ${gc_pay} "
                 f"wages {p['wages']} reimb {p['reimb']:.2f} bonus {bonus_s} "
-                f"note {note_s} ass {p['assurity']:.2f} net {p['net']}"
+                f"note {note_s} assurity deduction {deduction(p['assurity'])} net {p['net']}"
             )
     for t in trips:
         print("TRIP", t["name"], t["date"], t["miles"], t["amount"], t["evidence"][:80])
@@ -1044,7 +1083,7 @@ def main():
         "reimbursements",
         "thanksgiving_bonus",
         "note_bonus",
-        "assurity",
+        "assurity_deduction",
         "net_payable",
         "notes",
     ]
@@ -1094,7 +1133,7 @@ def main():
                     f"{p['reimb']:.2f}",
                     "" if p["bonus"] is None else f"{p['bonus']:.2f}",
                     "" if p["note_bonus"] is None else f"{p['note_bonus']:.2f}",
-                    f"{p['assurity']:.2f}",
+                    deduction_csv(p["assurity"]),
                     "" if p["net"] is None else f"{p['net']:.2f}",
                     summary_notes,
                 ]
@@ -1130,8 +1169,9 @@ def main():
                     ]
                 )
         company_note = (
-            "Company wages only. Thanksgiving bonus, note bonus, reimbursements, "
-            "and Assurity are week totals and are not included. "
+            "Company wages only. Thanksgiving bonus, note bonus, and reimbursements "
+            "are week totals and are not included. The Assurity deduction is subtracted "
+            "from net payable and is not company wages. "
             "George Piekarski is not included. Paulina and Esias stay additional. "
             "Contractor Kelly Renner’s manual line, Friday 11/20/2026, forgot to clock in, "
             "13.0 hours, is included in GC."
@@ -1237,7 +1277,7 @@ def main():
             f"<td class='num'>{money(p['reimb'])}</td>"
             f"<td class='num'>{money(p['bonus'])}</td>"
             f"<td class='num'>{money(p['note_bonus'])}</td>"
-            f"<td class='num'>{money(p['assurity'])}</td>"
+            f"<td class='num'>{deduction(p['assurity'])}</td>"
             f"<td class='num'>{money(p['net'])}</td>"
             "</tr>"
         )
@@ -1380,7 +1420,7 @@ def main():
                     f"rate {money(p['rate']) if p['rate'] is not None else '—'} · wages {money(p['wages'])} · "
                     f"reimbursements {money(p['reimb'])} · Thanksgiving bonus {money(p['bonus'])} · "
                     f"Note bonus {money(p['note_bonus'])} · "
-                    f"Assurity {money(p['assurity'])} · net {money(p['net'])}"
+                    f"Assurity deduction {deduction(p['assurity'])} · net {money(p['net'])}"
                     + (
                         f". Includes a manual line: {p['manual_line']['label']}."
                         if p.get("manual_line")
@@ -1455,17 +1495,17 @@ ul {{ margin: 4px 0 8px 18px; }}
 <div class="banner">TEST ONLY · DO NOT MERGE · DO NOT DEPLOY · This week is not on the live site.</div>
 <h1>Noble Field Ledger — test review, 11/16/2026 through 11/22/2026</h1>
 <p>ClockShark job-detail report and timesheet, both run 11/23/2026 at 8:43–8:48 AM Arizona time. Noble General Contracting (GC) and Noble Windows &amp; Doors (WD). Not a payment.</p>
-<p>Each contractor section is the timesheet: job, then the hours for 11/16 through 11/22. Under each job are the notes from the job-detail punches that make those hours. Day columns stay in hours and minutes, the same way the timesheet prints them. Pay uses each punch’s own tenth, then adds those tenths. Every contractor’s raw week total matches the timesheet. Breaks are already out of the ClockShark total. Net payable = ClockShark wages + reimbursements + Thanksgiving bonus + note bonus + additional lines − Assurity. No income tax. ClockShark wages are the timesheet wages plus the manual line for contractor Kelly Renner: Friday 11/20/2026, forgot to clock in, 13.0 hours. Her ClockShark punches stay as they are. 13.0 is already a tenth. The note bonus and the two additional lines are not in that wages total. They are added into net payable.</p>
+<p>Each contractor section is the timesheet: job, then the hours for 11/16 through 11/22. Under each job are the notes from the job-detail punches that make those hours. Day columns stay in hours and minutes, the same way the timesheet prints them. Pay uses each punch’s own tenth, then adds those tenths. Every contractor’s raw week total matches the timesheet. Breaks are already out of the ClockShark total. Net payable = ClockShark wages + reimbursements + Thanksgiving bonus + note bonus + additional lines − Assurity. Assurity is always a deduction. The summary column is Assurity deduction and each amount is a minus. Never add Assurity to a contractor’s net or to the week total. No income tax. ClockShark wages are the timesheet wages plus the manual line for contractor Kelly Renner: Friday 11/20/2026, forgot to clock in, 13.0 hours. Her ClockShark punches stay as they are. 13.0 is already a tenth. The note bonus and the two additional lines are not in that wages total. They are added into net payable.</p>
 <p>Thanksgiving bonus is {money(THANKSGIVING_BONUS)} for each contractor on this week except George Piekarski and Nicholas Sommer. It is not wages and not a reimbursement. Exceptional Cleaning Services/Paulina Moya and Angel Soto - Helper Esias do not receive it.</p>
 <p>Note bonus is the amount a contractor wrote on a punch, paid as its own line. It is not the Thanksgiving bonus and it is not wages. Nicholas Sturgeon {money(note_bonus_amounts['Nicholas Sturgeon'])} from his {e(note_bonus_evidence['Nicholas Sturgeon'][0]['date'])} note. Joe Orona {money(note_bonus_amounts['Joe Orona'])} from his {e(note_bonus_evidence['Joe Orona'][0]['date'])} note. Every other calculated contractor is $0.00. George Piekarski, Nicholas Sommer, Exceptional Cleaning Services/Paulina Moya, and Angel Soto - Helper Esias do not receive a note bonus.</p>
 <p>Additional lines, each on its own row after Angel Soto Moya, bucket additional, not WD and not GC. Exceptional Cleaning Services/Paulina Moya: raw 4:34 converted to 4.5 at $35.00 = {money(extras[0]['wages'])}. Angel Soto - Helper Esias: 20.7 hours, already converted, at $15.00 = {money(extras[1]['wages'])}. No Assurity, no fuel, no mileage, no Thanksgiving bonus, and no note bonus. Neither amount is in Angel Soto Moya’s hours, wages, or net.</p>
-<p><b>Wages {money(sum_wages)}. Reimbursements {money(sum_reimb)}. Thanksgiving bonus {money(sum_bonus)}. Note bonus {money(sum_note)}. Additional lines {money(sum_additional)}. Assurity {money(sum_assur)}. Net payable {money(sum_net)}.</b> Net payable = {money(sum_wages)} + {money(sum_reimb)} + {money(sum_bonus)} + {money(sum_note)} + {money(extras[0]['wages'])} + {money(extras[1]['wages'])} − {money(sum_assur)} = {money(sum_net)}.</p>
-<p><b>WD total {sum_wd_hours:.1f} hours, {money(sum_wd_wages)}. GC total {sum_gc_hours:.1f} hours, {money(sum_gc_wages)}.</b> Thanksgiving bonus, note bonus, reimbursements, and Assurity stay week totals and are not company wages.</p>
+<p><b>Wages {money(sum_wages)}. Reimbursements {money(sum_reimb)}. Thanksgiving bonus {money(sum_bonus)}. Note bonus {money(sum_note)}. Additional lines {money(sum_additional)}. Assurity deduction {deduction(sum_assur)}. Net payable {money(sum_net)}.</b> Net payable = {money(sum_wages)} + {money(sum_reimb)} + {money(sum_bonus)} + {money(sum_note)} + {money(extras[0]['wages'])} + {money(extras[1]['wages'])} + ({deduction(sum_assur)}) = {money(sum_net)}.</p>
+<p><b>WD total {sum_wd_hours:.1f} hours, {money(sum_wd_wages)}. GC total {sum_gc_hours:.1f} hours, {money(sum_gc_wages)}.</b> Thanksgiving bonus, note bonus, and reimbursements stay week totals and are not company wages. The Assurity deduction is subtracted from net payable and is not company wages.</p>
 <table>
-<thead><tr><th>Contractor</th><th>Raw</th><th>WD hours</th><th>WD wages</th><th>GC hours</th><th>GC wages</th><th>Rate</th><th>Wages</th><th>Reimbursements</th><th>Thanksgiving bonus</th><th>Note bonus</th><th>Assurity</th><th>Net payable</th></tr></thead>
+<thead><tr><th>Contractor</th><th>Raw</th><th>WD hours</th><th>WD wages</th><th>GC hours</th><th>GC wages</th><th>Rate</th><th>Wages</th><th>Reimbursements</th><th>Thanksgiving bonus</th><th>Note bonus</th><th>Assurity deduction</th><th>Net payable</th></tr></thead>
 <tbody>
 {''.join(rows)}
-<tr class="total"><td>Week total</td><td></td><td class="num">{sum_wd_hours:.1f}</td><td class="num">{money(sum_wd_wages)}</td><td class="num">{sum_gc_hours:.1f}</td><td class="num">{money(sum_gc_wages)}</td><td></td><td class="num">{money(sum_wages)}</td><td class="num">{money(sum_reimb)}</td><td class="num">{money(sum_bonus)}</td><td class="num">{money(sum_note)}</td><td class="num">{money(sum_assur)}</td><td class="num">{money(sum_net)}</td></tr>
+<tr class="total"><td>Week total</td><td></td><td class="num">{sum_wd_hours:.1f}</td><td class="num">{money(sum_wd_wages)}</td><td class="num">{sum_gc_hours:.1f}</td><td class="num">{money(sum_gc_wages)}</td><td></td><td class="num">{money(sum_wages)}</td><td class="num">{money(sum_reimb)}</td><td class="num">{money(sum_bonus)}</td><td class="num">{money(sum_note)}</td><td class="num">Assurity deduction {deduction(sum_assur)}</td><td class="num">{money(sum_net)}</td></tr>
 </tbody></table>
 <table>
 <thead><tr><th>Company</th><th>Hours</th><th>Wages</th></tr></thead>
