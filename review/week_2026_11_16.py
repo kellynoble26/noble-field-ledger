@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# 26-GC hours are GC hours. Do not show them as a separate total, column, or subtotal. They are already inside GC.
 """Test review for pay week 11/16/2026–11/22/2026.
 
 Reads the ClockShark job-detail report (one row per punch) and checks it
@@ -848,8 +849,7 @@ def main():
     )
     print(
         f"WD hours {sum_wd_hours:.1f} wages {sum_wd_wages:.2f} "
-        f"GC hours {sum_gc_hours:.1f} wages {sum_gc_wages:.2f} "
-        f"26-GC hours {sum_gc26_hours:.1f}"
+        f"GC hours {sum_gc_hours:.1f} wages {sum_gc_wages:.2f}"
     )
     print("bonus recipients:", ", ".join(recipients))
     for name in ("Nicholas Sturgeon", "Joe Orona"):
@@ -859,13 +859,12 @@ def main():
         if p["raw"] != "0:00" or p["wages"] or p["reimb"] or p["bonus"] or p.get("note_bonus"):
             wd = "—" if p["wd"] is None else f"{p['wd']:5.1f}"
             gc = "—" if p["gc"] is None else f"{p['gc']:5.1f}"
-            g26 = "—" if p["gc26"] is None else f"{p['gc26']:5.1f}"
             bonus_s = "—" if p["bonus"] is None else f"{p['bonus']:.2f}"
             note_s = "—" if p["note_bonus"] is None else f"{p['note_bonus']:.2f}"
             wd_pay = "—" if p.get("wd_wages") is None else f"{p['wd_wages']:.2f}"
             gc_pay = "—" if p.get("gc_wages") is None else f"{p['gc_wages']:.2f}"
             print(
-                f"{p['name']:24} raw {p['raw']:>7} WD {wd} ${wd_pay} GC {gc} ${gc_pay} 26 {g26} "
+                f"{p['name']:24} raw {p['raw']:>7} WD {wd} ${wd_pay} GC {gc} ${gc_pay} "
                 f"wages {p['wages']} reimb {p['reimb']:.2f} bonus {bonus_s} "
                 f"note {note_s} ass {p['assurity']:.2f} net {p['net']}"
             )
@@ -885,12 +884,10 @@ def main():
         "tenth",
         "job",
         "bucket",
-        "is_26gc",
         "wd",
         "wd_wages",
         "gc",
         "gc_wages",
-        "gc26",
         "rate",
         "wages",
         "mileage",
@@ -934,12 +931,10 @@ def main():
                     "" if p["hours"] is None else f"{p['hours']:.1f}",
                     "",
                     p.get("bucket", ""),
-                    "",
                     "" if p["wd"] is None else f"{p['wd']:.1f}",
                     "" if p.get("wd_wages") is None else f"{p['wd_wages']:.2f}",
                     "" if p["gc"] is None else f"{p['gc']:.1f}",
                     "" if p.get("gc_wages") is None else f"{p['gc_wages']:.2f}",
-                    "" if p["gc26"] is None else f"{p['gc26']:.1f}",
                     "" if p["rate"] is None else f"{p['rate']:.2f}",
                     "" if p["wages"] is None else f"{p['wages']:.2f}",
                     f"{p['mileage']:.2f}",
@@ -955,7 +950,6 @@ def main():
         company_note = (
             "Company wages only. Thanksgiving bonus, note bonus, reimbursements, "
             "and Assurity are week totals and are not included. "
-            "26-GC hours are inside GC and are not added again. "
             "George Piekarski is not included. Paulina and Esias stay additional."
         )
         w.writerow(
@@ -969,10 +963,8 @@ def main():
                 f"{sum_wd_hours:.1f}",
                 "",
                 "WD",
-                "",
                 f"{sum_wd_hours:.1f}",
                 f"{sum_wd_wages:.2f}",
-                "",
                 "",
                 "",
                 "",
@@ -1000,10 +992,8 @@ def main():
                 "GC",
                 "",
                 "",
-                "",
                 f"{sum_gc_hours:.1f}",
                 f"{sum_gc_wages:.2f}",
-                f"{sum_gc26_hours:.1f}",
                 "",
                 "",
                 "",
@@ -1029,8 +1019,6 @@ def main():
                         f"{punch['units'] / 10:.1f}",
                         punch["job"],
                         punch["bucket"],
-                        "yes" if punch["gc26"] else "",
-                        "",
                         "",
                         "",
                         "",
@@ -1060,7 +1048,6 @@ def main():
             f"<td class='num'>{money(p.get('wd_wages'))}</td>"
             f"<td class='num'>{'—' if p['gc'] is None else format(p['gc'], '.1f')}</td>"
             f"<td class='num'>{money(p.get('gc_wages'))}</td>"
-            f"<td class='num'>{'—' if p['gc26'] is None else format(p['gc26'], '.1f')}</td>"
             f"<td class='num'>{money(p['rate']) if p['rate'] is not None else '—'}</td>"
             f"<td class='num'>{money(p['wages'])}</td>"
             f"<td class='num'>{money(p['reimb'])}</td>"
@@ -1136,13 +1123,12 @@ def main():
                 if not punch["exclude"]:
                     tenths += punch["units"]
             bucket = plist[0]["bucket"]
-            gc26 = any(x["gc26"] for x in plist)
             cells = "".join(f"<td class='num'>{fmt_hm(by_day[d])}</td>" for d in days)
             raw_total = sum(by_day.values())
             tenth_cell = "—" if p["missing_rate"] else f"{tenths / 10:.1f}"
             sheet_rows.append(
                 "<tr>"
-                f"<td>{e(job)} <span class='tag'>{bucket}{' · 26-GC' if gc26 else ''}</span></td>"
+                f"<td>{e(job)} <span class='tag'>{bucket}</span></td>"
                 f"{cells}<td class='num'>{fmt_hm(raw_total)}</td><td class='num'>{tenth_cell}</td></tr>"
             )
             for punch in plist:
@@ -1176,7 +1162,7 @@ def main():
                 if p["missing_rate"]
                 else (
                     f"WD {p['wd']:.1f} · WD wages {money(p['wd_wages'])} · "
-                    f"GC {p['gc']:.1f} · GC wages {money(p['gc_wages'])} · 26-GC {p['gc26']:.1f} · "
+                    f"GC {p['gc']:.1f} · GC wages {money(p['gc_wages'])} · "
                     f"rate {money(p['rate']) if p['rate'] is not None else '—'} · wages {money(p['wages'])} · "
                     f"reimbursements {money(p['reimb'])} · Thanksgiving bonus {money(p['bonus'])} · "
                     f"Note bonus {money(p['note_bonus'])} · "
@@ -1188,7 +1174,7 @@ def main():
             + table
             + "</section>"
         )
-    jobs = defaultdict(lambda: {"hours": 0.0, "u": 0, "punches": 0, "wages": 0.0, "names": set(), "gc26": 0})
+    jobs = defaultdict(lambda: {"hours": 0.0, "u": 0, "punches": 0, "wages": 0.0, "names": set()})
     for p in people:
         if p["missing_rate"]:
             continue
@@ -1200,8 +1186,6 @@ def main():
             rec["u"] += punch["units"]
             rec["punches"] += 1
             rec["names"].add(p["name"])
-            if punch["gc26"]:
-                rec["gc26"] += punch["units"]
             if p["rate"] is not None:
                 rec["wages"] += punch["units"] / 10 * p["rate"]
     job_rows = []
@@ -1209,7 +1193,7 @@ def main():
         job_rows.append(
             "<tr>"
             f"<td>{e(job)}</td><td>{e(bucket)}</td><td class='num'>{rec['punches']}</td>"
-            f"<td class='num'>{rec['u'] / 10:.1f}</td><td class='num'>{rec['gc26'] / 10:.1f}</td>"
+            f"<td class='num'>{rec['u'] / 10:.1f}</td>"
             f"<td class='num'>{money(q2(rec['wages']))}</td>"
             f"<td>{e(', '.join(sorted(rec['names'])))}</td></tr>"
         )
@@ -1237,29 +1221,29 @@ ul {{ margin: 4px 0 8px 18px; }}
 <div class="banner">TEST ONLY · DO NOT MERGE · DO NOT DEPLOY · This week is not on the live site.</div>
 <h1>Noble Field Ledger — test review, 11/16/2026 through 11/22/2026</h1>
 <p>ClockShark job-detail report and timesheet, both run 11/23/2026 at 8:43–8:48 AM Arizona time. Noble General Contracting (GC) and Noble Windows &amp; Doors (WD). Not a payment.</p>
-<p>Each contractor section is the timesheet: job, then the hours for 11/16 through 11/22. Under each job are the notes from the job-detail punches that make those hours. Day columns stay in hours and minutes, the same way the timesheet prints them. Pay uses each punch’s own tenth, then adds those tenths. Every contractor’s raw week total matches the timesheet. Breaks are already out of the ClockShark total. 26-GC sits inside GC. Net payable = ClockShark wages + reimbursements + Thanksgiving bonus + note bonus + additional lines − Assurity. No income tax. ClockShark wages stay the timesheet wages. The note bonus and the two additional lines are not in that wages total. They are added into net payable.</p>
+<p>Each contractor section is the timesheet: job, then the hours for 11/16 through 11/22. Under each job are the notes from the job-detail punches that make those hours. Day columns stay in hours and minutes, the same way the timesheet prints them. Pay uses each punch’s own tenth, then adds those tenths. Every contractor’s raw week total matches the timesheet. Breaks are already out of the ClockShark total. Net payable = ClockShark wages + reimbursements + Thanksgiving bonus + note bonus + additional lines − Assurity. No income tax. ClockShark wages stay the timesheet wages. The note bonus and the two additional lines are not in that wages total. They are added into net payable.</p>
 <p>Thanksgiving bonus is {money(THANKSGIVING_BONUS)} for each contractor on this week except George Piekarski and Nicholas Sommer. It is not wages and not a reimbursement. Exceptional Cleaning Services/Paulina Moya and Angel Soto - Helper Esias do not receive it.</p>
 <p>Note bonus is the amount a contractor wrote on a punch, paid as its own line. It is not the Thanksgiving bonus and it is not wages. Nicholas Sturgeon {money(note_bonus_amounts['Nicholas Sturgeon'])} from his {e(note_bonus_evidence['Nicholas Sturgeon'][0]['date'])} note. Joe Orona {money(note_bonus_amounts['Joe Orona'])} from his {e(note_bonus_evidence['Joe Orona'][0]['date'])} note. Every other calculated contractor is $0.00. George Piekarski, Nicholas Sommer, Exceptional Cleaning Services/Paulina Moya, and Angel Soto - Helper Esias do not receive a note bonus.</p>
 <p>Additional lines, each on its own row after Angel Soto Moya, bucket additional, not WD and not GC. Exceptional Cleaning Services/Paulina Moya: raw 4:34 converted to 4.5 at $35.00 = {money(extras[0]['wages'])}. Angel Soto - Helper Esias: 20.7 hours, already converted, at $15.00 = {money(extras[1]['wages'])}. No Assurity, no fuel, no mileage, no Thanksgiving bonus, and no note bonus. Neither amount is in Angel Soto Moya’s hours, wages, or net.</p>
 <p><b>Wages {money(sum_wages)}. Reimbursements {money(sum_reimb)}. Thanksgiving bonus {money(sum_bonus)}. Note bonus {money(sum_note)}. Additional lines {money(sum_additional)}. Assurity {money(sum_assur)}. Net payable {money(sum_net)}.</b> Net payable = {money(sum_wages)} + {money(sum_reimb)} + {money(sum_bonus)} + {money(sum_note)} + {money(extras[0]['wages'])} + {money(extras[1]['wages'])} − {money(sum_assur)} = {money(sum_net)}.</p>
-<p><b>WD total {sum_wd_hours:.1f} hours, {money(sum_wd_wages)}. GC total {sum_gc_hours:.1f} hours, {money(sum_gc_wages)}.</b> Of the GC hours, {sum_gc26_hours:.1f} are 26-GC. Those hours are already inside GC and are not added again. Thanksgiving bonus, note bonus, reimbursements, and Assurity stay week totals and are not company wages.</p>
+<p><b>WD total {sum_wd_hours:.1f} hours, {money(sum_wd_wages)}. GC total {sum_gc_hours:.1f} hours, {money(sum_gc_wages)}.</b> Thanksgiving bonus, note bonus, reimbursements, and Assurity stay week totals and are not company wages.</p>
 <table>
-<thead><tr><th>Contractor</th><th>Raw</th><th>WD hours</th><th>WD wages</th><th>GC hours</th><th>GC wages</th><th>26-GC</th><th>Rate</th><th>Wages</th><th>Reimbursements</th><th>Thanksgiving bonus</th><th>Note bonus</th><th>Assurity</th><th>Net payable</th></tr></thead>
+<thead><tr><th>Contractor</th><th>Raw</th><th>WD hours</th><th>WD wages</th><th>GC hours</th><th>GC wages</th><th>Rate</th><th>Wages</th><th>Reimbursements</th><th>Thanksgiving bonus</th><th>Note bonus</th><th>Assurity</th><th>Net payable</th></tr></thead>
 <tbody>
 {''.join(rows)}
-<tr class="total"><td>Week total</td><td></td><td class="num">{sum_wd_hours:.1f}</td><td class="num">{money(sum_wd_wages)}</td><td class="num">{sum_gc_hours:.1f}</td><td class="num">{money(sum_gc_wages)}</td><td class="num">{sum_gc26_hours:.1f}</td><td></td><td class="num">{money(sum_wages)}</td><td class="num">{money(sum_reimb)}</td><td class="num">{money(sum_bonus)}</td><td class="num">{money(sum_note)}</td><td class="num">{money(sum_assur)}</td><td class="num">{money(sum_net)}</td></tr>
+<tr class="total"><td>Week total</td><td></td><td class="num">{sum_wd_hours:.1f}</td><td class="num">{money(sum_wd_wages)}</td><td class="num">{sum_gc_hours:.1f}</td><td class="num">{money(sum_gc_wages)}</td><td></td><td class="num">{money(sum_wages)}</td><td class="num">{money(sum_reimb)}</td><td class="num">{money(sum_bonus)}</td><td class="num">{money(sum_note)}</td><td class="num">{money(sum_assur)}</td><td class="num">{money(sum_net)}</td></tr>
 </tbody></table>
 <table>
-<thead><tr><th>Company</th><th>Hours</th><th>Wages</th><th>26-GC hours</th></tr></thead>
+<thead><tr><th>Company</th><th>Hours</th><th>Wages</th></tr></thead>
 <tbody>
-<tr><td>WD · Noble Windows &amp; Doors</td><td class="num">{sum_wd_hours:.1f}</td><td class="num">{money(sum_wd_wages)}</td><td class="num">—</td></tr>
-<tr><td>GC · Noble General Contracting</td><td class="num">{sum_gc_hours:.1f}</td><td class="num">{money(sum_gc_wages)}</td><td class="num">{sum_gc26_hours:.1f}</td></tr>
-<tr class="total"><td>ClockShark wages</td><td></td><td class="num">{money(sum_wages)}</td><td>26-GC is inside the GC hours above.</td></tr>
+<tr><td>WD · Noble Windows &amp; Doors</td><td class="num">{sum_wd_hours:.1f}</td><td class="num">{money(sum_wd_wages)}</td></tr>
+<tr><td>GC · Noble General Contracting</td><td class="num">{sum_gc_hours:.1f}</td><td class="num">{money(sum_gc_wages)}</td></tr>
+<tr class="total"><td>ClockShark wages</td><td></td><td class="num">{money(sum_wages)}</td></tr>
 </tbody></table>
 <h2>Read these before the detail</h2>
 <ul>
 <li>George Piekarski and Nicholas Sommer are not calculated. George’s 73:45 stays on his timesheet with the job-detail notes, including the 20:12 punch, the 0:23 punch, the 23:00 punch, and the 11:27 overnight punch. Those hours are in neither the WD total nor the GC total. Nicholas Sommer has no punches and is not on this review.</li>
-<li>WD wages are WD hours times that contractor’s rate. GC wages are GC hours times the same rate. Combined wages equal WD wages plus GC wages. 26-GC hours are inside GC.</li>
+<li>WD wages are WD hours times that contractor’s rate. GC wages are GC hours times the same rate. Combined wages equal WD wages plus GC wages.</li>
 <li>A customer price in a note ($85 an hour, a $275 trip) is not a pay rate.</li>
 <li>Brecken Bogle’s 3:54 on Tony Arnold is left out of pay. He wrote that the homeowner paid cash. Jose Carranza’s 6:55 on 11/20/2026 on Tony Arnold is left out of pay. Kelly said the homeowner paid cash. Jose Carranza’s $50 fuel stipend was a one-time stipend for the distance of that project and is not paid this week. Andy Gomez’s $50 fuel stipend stays.</li>
 <li>Notes that ask for a bonus are included as their own lines, separate from the Thanksgiving bonus: Nicholas Sturgeon {money(note_bonus_amounts['Nicholas Sturgeon'])}, Joe Orona {money(note_bonus_amounts['Joe Orona'])}. Those amounts are in each contractor’s net. Angel Soto Moya’s 11/19/2026 note on the 4:34 cleaning punch says Paulina $35hr. That pay is the additional line for Exceptional Cleaning Services/Paulina Moya, raw 4:34 converted to 4.5 at $35.00, $157.50. Angel Soto - Helper Esias is 20.7 hours at $15.00, $310.50. Both are separate lines and are not in Angel’s net.</li>
@@ -1272,7 +1256,7 @@ ul {{ margin: 4px 0 8px 18px; }}
 {''.join(details)}
 <section class="person"><h2>Projects</h2>
 <p>Hours are the sum of each paid punch’s tenth. The cash Tony Arnold punches are not in this table.</p>
-<table><thead><tr><th>Project</th><th>Bucket</th><th>Punches</th><th>Hours</th><th>of which 26-GC</th><th>Wages</th><th>Contractors</th></tr></thead>
+<table><thead><tr><th>Project</th><th>Bucket</th><th>Punches</th><th>Hours</th><th>Wages</th><th>Contractors</th></tr></thead>
 <tbody>{''.join(job_rows)}</tbody></table>
 </section>
 </body></html>
