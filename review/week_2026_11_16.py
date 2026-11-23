@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Assurity is always a deduction. Net payable = wages + reimbursements + Thanksgiving bonus + note bonus + additional lines − Assurity. Never add Assurity to net. This applies to every contractor and to the week total. A contractor with no Assurity stays at $0. Matthew Laush has no Assurity. Do not invent an Assurity amount. Show every Assurity amount as a minus. Do not leave a positive Assurity figure that a reader could add into the net.
+# Assurity is always a deduction. Net payable = wages + reimbursements + Thanksgiving bonus + note bonus + additional lines − Assurity. Never add Assurity to net. This applies to every contractor and to the week total. A contractor with no Assurity stays at $0. Matthew Laush has no Assurity. Do not invent an Assurity amount. Show every Assurity amount as a minus. Do not leave a positive Assurity figure that a reader could add into the net. Assurity is only for contractors who are enrolled, not everyone.
 # 26-GC hours are GC hours. Do not show them as a separate total, column, or subtotal. They are already inside GC.
 """Test review for pay week 11/16/2026–11/22/2026.
 
