@@ -344,18 +344,21 @@ def load_punches():
 def mileage(punches):
     trips = []
     # Nicholas: explicit miles on each note.
+    # Company vehicle mileage is $0.60 per mile, same as Matthew Laush.
+    # Nicholas Sturgeon drives a company vehicle. Keep every trip and the miles.
     for p in punches:
         if p["name"] != "Nicholas Sturgeon":
             continue
         for m in MILE_RE.finditer(p["note"]):
             miles = float(m.group(1))
+            rate = 0.60
             trips.append(
                 {
                     "name": p["name"],
                     "date": p["date"],
                     "miles": miles,
-                    "rate": 0.76,
-                    "amount": q2(miles * 0.76),
+                    "rate": rate,
+                    "amount": q2(miles * rate),
                     "evidence": p["note"],
                 }
             )
@@ -384,6 +387,7 @@ def mileage(punches):
             for m in PAIR_RE.finditer(p["note"]):
                 a, b = int(m.group(1)), int(m.group(2))
                 if 0 < b - a <= 1000:
+                    # Company truck over 300,000 miles is $0.60. Personal truck is $0.76.
                     rate = 0.60 if max(a, b) > 300000 else 0.76
                     trips.append(
                         {
@@ -404,6 +408,7 @@ def mileage(punches):
                         singles.append(v)
         for a, b in zip(singles, singles[1:]):
             if 0 < b - a <= 1000:
+                # Same odometer rule: company truck over 300,000 miles is $0.60, personal truck is $0.76.
                 rate = 0.60 if max(a, b) > 300000 else 0.76
                 trips.append(
                     {
@@ -843,7 +848,7 @@ def main():
             )
     if (
         abs(sum_wages - 24504.80) > 0.001
-        or abs(sum_reimb - 582.76) > 0.001
+        or abs(sum_reimb - 508.20) > 0.001
         or abs(sum_bonus - 1900.00) > 0.001
         or abs(sum_additional - 468.00) > 0.001
         or abs(sum_assur - 395.32) > 0.001
@@ -853,11 +858,11 @@ def main():
             f"additional {sum_additional} assurity {sum_assur}"
         )
     prior_net = q2(sum_wages + sum_reimb + sum_bonus + sum_additional - sum_assur)
-    if abs(prior_net - 27060.24) > 0.001:
+    if abs(prior_net - 26985.68) > 0.001:
         raise SystemExit(f"base net moved {prior_net}")
     if abs(sum_net - q2(prior_net + sum_note)) > 0.001:
         raise SystemExit(f"net {sum_net} != {prior_net} + note bonus {sum_note}")
-    if abs(sum_net - 27310.24) > 0.001:
+    if abs(sum_net - 27235.68) > 0.001:
         raise SystemExit(f"net payable changed {sum_net}")
     for p in clock:
         if p["gc26"] - p["gc"] > 0.001:
@@ -892,8 +897,32 @@ def main():
             raise SystemExit(f"{p['name']} was assigned to WD or GC")
     nicholas = next(p for p in people if p["name"] == "Nicholas Sturgeon")
     joe = next(p for p in people if p["name"] == "Joe Orona")
-    if nicholas["note_bonus"] != 150 or abs(nicholas["net"] - 2467.36) > 0.001:
-        raise SystemExit(f"Nicholas note bonus changed {nicholas['note_bonus']} {nicholas['net']}")
+    if (
+        nicholas["note_bonus"] != 150
+        or nicholas["bonus"] != THANKSGIVING_BONUS
+        or len(nicholas["trips"]) != 15
+        or abs(nicholas["miles"] - 466) > 0.001
+        or any(t["rate"] != 0.60 for t in nicholas["trips"])
+        or abs(nicholas["mileage"] - 279.60) > 0.001
+        or abs(nicholas["reimb"] - 279.60) > 0.001
+        or abs(nicholas["net"] - 2392.80) > 0.001
+        or abs(nicholas["wages"] - 1863.20) > 0.001
+    ):
+        raise SystemExit(
+            f"Nicholas pay changed miles {nicholas['miles']} mileage {nicholas['mileage']} "
+            f"note {nicholas['note_bonus']} net {nicholas['net']}"
+        )
+    marco = next(p for p in people if p["name"] == "Marco Garcia")
+    if (
+        len(marco["trips"]) != 3
+        or abs(marco["miles"] - 235) > 0.001
+        or any(t["rate"] != 0.76 for t in marco["trips"])
+        or abs(marco["mileage"] - 178.60) > 0.001
+        or abs(marco["reimb"] - 178.60) > 0.001
+    ):
+        raise SystemExit(
+            f"Marco mileage changed {marco['miles']} {marco['mileage']} {marco['trips']}"
+        )
     if joe["note_bonus"] != 100 or abs(joe["net"] - 1822.40) > 0.001:
         raise SystemExit(f"Joe note bonus changed {joe['note_bonus']} {joe['net']}")
     jose = next(p for p in people if p["name"] == "Jose Carranza")
