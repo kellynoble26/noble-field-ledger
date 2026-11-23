@@ -606,6 +606,14 @@ def main():
             f"<td class='num'>{money(p['net'])}</td>"
             "</tr>"
         )
+    days = [f"11/{d}/2026" for d in range(16, 23)]
+    day_labels = ["Mon 11/16", "Tue 11/17", "Wed 11/18", "Thu 11/19", "Fri 11/20", "Sat 11/21", "Sun 11/22"]
+
+    def fmt_hm(minutes):
+        if not minutes:
+            return "—"
+        return f"{minutes // 60}:{minutes % 60:02d}"
+
     details = []
     for p in people:
         if not p["punches"] and not p["note"]:
@@ -621,37 +629,55 @@ def main():
             bits.append(f"<p><b>Mileage {money(p['mileage'])}.</b></p><ul>{items}</ul>")
         if p["fuel"]:
             bits.append(f"<p>Fuel stipend {money(p['fuel'])}.</p>")
-        body = []
+        # Timesheet shape: one row per job, day columns are the raw hours on the timesheet.
+        # Notes from the job-detail punches sit under that row.
+        order = []
+        grouped = defaultdict(list)
         for punch in p["punches"]:
-            flag = ""
-            if punch["exclude"]:
-                flag = " · not paid"
-            elif punch["flags"]:
-                flag = " · " + punch["flags"][0]
-            note = e(punch["note"])
-            extra = ""
-            if punch["ws"]:
-                extra = " · 26-WS counted as GC"
-            if punch["wd_word"]:
-                extra = " · W&amp;D wording, no 26-WD tag, counted as GC"
-            body.append(
+            if punch["job"] not in grouped:
+                order.append(punch["job"])
+            grouped[punch["job"]].append(punch)
+        sheet_rows = []
+        for job in order:
+            plist = grouped[job]
+            by_day = defaultdict(int)
+            tenths = 0
+            for punch in plist:
+                by_day[punch["date"]] += punch["minutes"]
+                if not punch["exclude"]:
+                    tenths += punch["units"]
+            bucket = plist[0]["bucket"]
+            gc26 = any(x["gc26"] for x in plist)
+            cells = "".join(f"<td class='num'>{fmt_hm(by_day[d])}</td>" for d in days)
+            raw_total = sum(by_day.values())
+            sheet_rows.append(
                 "<tr>"
-                f"<td>{e(punch['date'])}</td><td>{e(punch['in'])}</td><td>{e(punch['out'])}</td>"
-                f"<td class='num'>{e(punch['raw'])}</td><td class='num'>{punch['units'] / 10:.1f}</td>"
-                f"<td>{e(punch['job'])}</td>"
-                f"<td>{punch['bucket']}{' · 26-GC' if punch['gc26'] else ''}{e(flag)}{extra}</td>"
-                f"<td class='note'>{note}</td></tr>"
+                f"<td>{e(job)} <span class='tag'>{bucket}{' · 26-GC' if gc26 else ''}</span></td>"
+                f"{cells}<td class='num'>{fmt_hm(raw_total)}</td><td class='num'>{tenths / 10:.1f}</td></tr>"
             )
+            for punch in plist:
+                note = punch["note"] or "No note on this punch."
+                mark = " Not paid." if punch["exclude"] else ""
+                sheet_rows.append(
+                    "<tr class='punch-note'><td colspan='10'>"
+                    f"<b>{e(punch['date'])}</b> {e(punch['in'])}–{e(punch['out'])} "
+                    f"raw {e(punch['raw'])} → {punch['units'] / 10:.1f}{e(mark)}. {e(note)}"
+                    "</td></tr>"
+                )
+        head = "".join(f"<th>{lab}</th>" for lab in day_labels)
         table = (
-            "<table><thead><tr><th>Day</th><th>In</th><th>Out</th><th>Raw</th><th>Tenth</th><th>Job</th><th>Bucket</th><th>Notes</th></tr></thead><tbody>"
-            + "".join(body)
+            "<table class='sheet'><thead><tr><th>Job on the timesheet</th>"
+            + head
+            + "<th>Raw total</th><th>Tenths</th></tr></thead><tbody>"
+            + "".join(sheet_rows)
             + "</tbody></table>"
-            if body
-            else "<p>No punches.</p>"
+            if sheet_rows
+            else "<p>No punches on the timesheet.</p>"
         )
         details.append(
             f"<section class='person'><h2>{e(p['name'])}</h2>"
-            f"<p>WD {p['wd']:.1f} · GC {p['gc']:.1f} · 26-GC {p['gc26']:.1f} · "
+            f"<p>Timesheet hours, with the job-detail note on each punch. "
+            f"WD {p['wd']:.1f} · GC {p['gc']:.1f} · 26-GC {p['gc26']:.1f} · "
             f"rate {money(p['rate']) if p['rate'] is not None else '—'} · wages {money(p['wages'])} · "
             f"reimbursements {money(p['reimb'])} · Assurity {money(p['assurity'])} · net {money(p['net'])}</p>"
             + "".join(bits)
@@ -695,6 +721,8 @@ th, td {{ border: 1px solid #d6d3d1; padding: 3px 5px; vertical-align: top; }}
 th {{ background: #1f4e79; color: #fff; text-align: left; }}
 .num {{ text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }}
 tr.total td {{ background: #f5f5f4; font-weight: 700; }}
+tr.punch-note td {{ background: #fafaf9; color: #444; }}
+.tag {{ color: #1f4e79; font-size: 10px; }}
 .note {{ color: #444; }}
 .person {{ page-break-before: always; }}
 ul {{ margin: 4px 0 8px 18px; }}
@@ -702,7 +730,7 @@ ul {{ margin: 4px 0 8px 18px; }}
 <div class="banner">TEST ONLY · DO NOT MERGE · DO NOT DEPLOY · This week is not on the live site.</div>
 <h1>Noble Field Ledger — test review, 11/16/2026 through 11/22/2026</h1>
 <p>ClockShark job-detail report and timesheet, both run 11/23/2026 at 8:43–8:48 AM Arizona time. Noble General Contracting (GC) and Noble Windows &amp; Doors (WD). Not a payment.</p>
-<p>Each of the 146 punches is converted on its own leftover minutes, then those tenths are added. The timesheet’s daily totals were used only as a check: every contractor’s raw hours match that sheet. Breaks are already out of the ClockShark total. 26-GC sits inside GC. Net payable = wages + reimbursements − Assurity. No income tax.</p>
+<p>Each contractor section is the timesheet: job, then the hours for 11/16 through 11/22. Under each job are the notes from the job-detail punches that make those hours. Day columns stay in hours and minutes, the same way the timesheet prints them. Pay uses each punch’s own tenth, then adds those tenths. Every contractor’s raw week total matches the timesheet. Breaks are already out of the ClockShark total. 26-GC sits inside GC. Net payable = wages + reimbursements − Assurity. No income tax.</p>
 <p><b>Wages {money(sum_wages)}. Reimbursements {money(sum_reimb)}. Assurity {money(sum_assur)}. Net payable {money(sum_net)}.</b></p>
 <table>
 <thead><tr><th>Contractor</th><th>Raw</th><th>WD</th><th>GC</th><th>26-GC</th><th>Rate</th><th>Wages</th><th>Reimbursements</th><th>Assurity</th><th>Net payable</th></tr></thead>
