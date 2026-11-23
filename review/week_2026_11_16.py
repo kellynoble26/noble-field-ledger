@@ -1035,12 +1035,63 @@ def main():
             f"Kelly manual line mismatch GC {kelly['gc']} wages {kelly['wages']} "
             f"assurity {kelly['assurity']} net {kelly['net']} line {kelly.get('manual_line')}"
         )
+    # Company table only. An enrolled contractor with paid WD hours and no
+    # paid GC hours belongs on the WD Assurity cell. Any GC hours stay in
+    # the week total. The GC cell stays blank. This does not change net pay.
+    wd_assurity_people = []
+    wd_assurity_excluded = []
+    for name, amount in ASSURITY.items():
+        person = next(p for p in people if p["name"] == name)
+        paid_wd = person["wd"] or 0.0
+        paid_gc = person["gc"] or 0.0
+        if paid_wd > 0.001 and paid_gc <= 0.001:
+            wd_assurity_people.append(person)
+        else:
+            wd_assurity_excluded.append(person)
+        if abs(person["assurity"] - amount) > 0.001:
+            raise SystemExit(f"{name} Assurity changed {person['assurity']}")
+    wd_assur = q2(sum((p["assurity"] for p in wd_assurity_people), 0.0))
+    held_back = q2(sum((p["assurity"] for p in wd_assurity_excluded), 0.0))
+    if abs(q2(wd_assur + held_back) - sum_assur) > 0.001:
+        raise SystemExit(
+            f"WD Assurity {wd_assur} plus the rest {held_back} != week {sum_assur}"
+        )
+    for person in wd_assurity_people:
+        if (person["gc"] or 0) > 0.001 or (person["wd"] or 0) <= 0.001:
+            raise SystemExit(f"{person['name']} does not belong on the WD Assurity cell")
+    for person in wd_assurity_excluded:
+        if (person["wd"] or 0) > 0.001 and (person["gc"] or 0) <= 0.001:
+            raise SystemExit(f"{person['name']} was left off the WD Assurity cell")
+    wd_assurity_cell = deduction(wd_assur) if wd_assurity_people else "—"
+    if wd_assurity_people:
+        shown = [e(person["name"]) for person in wd_assurity_people]
+        if len(shown) == 1:
+            who = shown[0]
+        elif len(shown) == 2:
+            who = f"{shown[0]} and {shown[1]}"
+        else:
+            who = ", ".join(shown[:-1]) + f", and {shown[-1]}"
+        wd_assurity_sentence = f"The WD Assurity figure includes contractors {who}."
+    else:
+        wd_assurity_sentence = "The WD Assurity figure includes no contractor this week."
     print(
         f"punches {len(punches)} wages {sum_wages:.2f} reimb {sum_reimb:.2f} "
         f"bonus {sum_bonus:.2f} ({len(recipients)}) note {sum_note:.2f} "
         f"additional {sum_additional:.2f} "
         f"assurity deduction {deduction(sum_assur)} clock net {sum_clock_net:.2f} net {sum_net:.2f}"
     )
+    print(
+        f"WD Assurity {wd_assurity_cell} includes "
+        + ", ".join(
+            f"{p['name']} WD {p['wd']:.1f} GC {p['gc']:.1f} {deduction(p['assurity'])}"
+            for p in wd_assurity_people
+        )
+    )
+    for person in wd_assurity_excluded:
+        print(
+            f"WD Assurity left off {person['name']} WD {person['wd']:.1f} "
+            f"GC {person['gc']:.1f} {deduction(person['assurity'])}"
+        )
     print(
         f"WD hours {sum_wd_hours:.1f} wages {sum_wd_wages:.2f} "
         f"GC hours {sum_gc_hours:.1f} wages {sum_gc_wages:.2f} "
@@ -1176,10 +1227,16 @@ def main():
                         + " Included in the summary row above. Do not add this line again.",
                     ]
                 )
+        wd_assurity_names = ", ".join(p["name"] for p in wd_assurity_people)
         company_note = (
             "Company wages only. Fuel/mileage/reimbursement, Thanksgiving bonus, "
-            "piecework bonus, and Assurity are not split by company. They are on the week row. "
-            "The Assurity deduction is subtracted from net payable and is not company wages. "
+            "and piecework bonus are not split by company. They are on the week row. "
+            "The WD Assurity cell is the deduction for enrolled contractors with only "
+            f"Windows & Doors hours: {wd_assurity_names}. "
+            "A contractor with any GC hours is left out of that cell. "
+            "The GC Assurity cell stays blank. "
+            "The week row shows the full Assurity deduction. "
+            "Assurity is subtracted from net payable and is not company wages. "
             "George Piekarski is not included. Paulina and Esias stay additional and are not "
             "in the company wage cells. "
             "Contractor Kelly Renner’s manual line, Friday 11/20/2026, forgot to clock in, "
@@ -1194,6 +1251,8 @@ def main():
             f"Piecework bonus {sum_note:.2f}. "
             f"Wages {sum_wages:.2f}. "
             f"Assurity deduction {deduction_csv(sum_assur)}. "
+            "The WD company row shows only enrolled contractors with only Windows & Doors hours. "
+            "The GC Assurity cell stays blank. "
             "Additional lines stay additional and are not in the wage cell. "
             f"Net payable {sum_net:.2f} is wages + fuel/mileage/reimbursement + "
             "Thanksgiving bonus + piecework bonus + additional lines − Assurity."
@@ -1220,7 +1279,7 @@ def main():
                 "",
                 "",
                 "",
-                "",
+                deduction_csv(wd_assur) if wd_assurity_people else "",
                 "",
                 company_note,
             ]
@@ -1549,14 +1608,15 @@ ul {{ margin: 4px 0 8px 18px; }}
 <p>Piecework bonus is the amount a contractor wrote on a punch, paid as its own line. It is not the Thanksgiving bonus and it is not wages. Nicholas Sturgeon {money(note_bonus_amounts['Nicholas Sturgeon'])} from his {e(note_bonus_evidence['Nicholas Sturgeon'][0]['date'])} note. Joe Orona {money(note_bonus_amounts['Joe Orona'])} from his {e(note_bonus_evidence['Joe Orona'][0]['date'])} note. Every other calculated contractor is $0.00. George Piekarski, Nicholas Sommer, Exceptional Cleaning Services/Paulina Moya, and Angel Soto - Helper Esias do not receive a piecework bonus.</p>
 <p>Additional lines, each on its own row after Angel Soto Moya, bucket additional, not WD and not GC. Exceptional Cleaning Services/Paulina Moya: raw 4:34 converted to 4.5 at $35.00 = {money(extras[0]['wages'])}. Angel Soto - Helper Esias: 20.7 hours, already converted, at $15.00 = {money(extras[1]['wages'])}. No Assurity, no fuel, no mileage, no Thanksgiving bonus, and no piecework bonus. Neither amount is in Angel Soto Moya’s hours, wages, or net.</p>
 <p><b>Wages {money(sum_wages)}. Fuel/mileage/reimbursement {money(sum_reimb)}. Thanksgiving bonus {money(sum_bonus)}. Piecework bonus {money(sum_note)}. Additional lines {money(sum_additional)} (Paulina {money(extras[0]['wages'])} and Esias {money(extras[1]['wages'])}). Assurity deduction {deduction(sum_assur)}. Net payable {money(sum_net)}.</b> Net payable = wages {money(sum_wages)} + fuel/mileage/reimbursement {money(sum_reimb)} + Thanksgiving {money(sum_bonus)} + piecework bonus {money(sum_note)} + additional lines {money(sum_additional)} (Paulina {money(extras[0]['wages'])} and Esias {money(extras[1]['wages'])}) − Assurity {money(sum_assur)} = net payable {money(sum_net)}.</p>
-<p><b>WD total {sum_wd_hours:.1f} hours, {money(sum_wd_wages)}. GC total {sum_gc_hours:.1f} hours, {money(sum_gc_wages)}.</b> Fuel/mileage/reimbursement, Thanksgiving bonus, and piecework bonus are week totals. They are not split by company. Assurity is a deduction on the week row and is not company wages. Additional lines stay additional and are not in these wage cells.</p>
+<p><b>WD total {sum_wd_hours:.1f} hours, {money(sum_wd_wages)}. GC total {sum_gc_hours:.1f} hours, {money(sum_gc_wages)}.</b> Fuel/mileage/reimbursement, Thanksgiving bonus, and piecework bonus are week totals. They are not split by company. The WD Assurity cell shows the deduction for enrolled contractors who have only Windows &amp; Doors hours. The week row still shows the full Assurity deduction. Assurity is not company wages. Additional lines stay additional and are not in these wage cells.</p>
 <table>
 <thead><tr><th>Company</th><th>Hours</th><th>Fuel/mileage/reimbursement</th><th>Thanksgiving bonus</th><th>Piecework bonus</th><th>Wages</th><th>Assurity</th></tr></thead>
 <tbody>
-<tr><td>WD · Noble Windows &amp; Doors</td><td class="num">{sum_wd_hours:.1f}</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">{money(sum_wd_wages)}</td><td class="num">—</td></tr>
+<tr><td>WD · Noble Windows &amp; Doors</td><td class="num">{sum_wd_hours:.1f}</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">{money(sum_wd_wages)}</td><td class="num">{wd_assurity_cell}</td></tr>
 <tr><td>GC · Noble General Contracting</td><td class="num">{sum_gc_hours:.1f}</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">{money(sum_gc_wages)}</td><td class="num">—</td></tr>
 <tr class="total"><td>Week</td><td class="num">{sum_paid_hours:.1f}</td><td class="num">{money(sum_reimb)}</td><td class="num">{money(sum_bonus)}</td><td class="num">{money(sum_note)}</td><td class="num">{money(sum_wages)}</td><td class="num">{deduction(sum_assur)}</td></tr>
 </tbody></table>
+<p>{wd_assurity_sentence}</p>
 <table>
 <thead><tr><th>Contractor</th><th>Raw</th><th>WD hours</th><th>WD wages</th><th>GC hours</th><th>GC wages</th><th>Rate</th><th>Wages</th><th>Fuel/mileage/reimbursement</th><th>Thanksgiving bonus</th><th>Piecework bonus</th><th>Assurity deduction</th><th>Net payable</th></tr></thead>
 <tbody>
