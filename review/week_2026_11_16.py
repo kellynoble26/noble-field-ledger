@@ -392,13 +392,10 @@ def rollup(punches, trips):
     by = defaultdict(list)
     for p in punches:
         by[p["name"]].append(p)
-    names = sorted(set(by) | set(RATES) | {"George Piekarski", "Nicholas Sommer"})
-    # Only people on this week's timesheet, plus salary/stipend rules and the no-rate name.
-    on_sheet = set(SHEET) | {
-        "Christian Ellis Blank",
-        "Matthew Laush",
-        "Nicholas Sommer",
-    }
+    # George Piekarski and Nicholas Sommer are on the timesheet and have no rate.
+    # Their hours are not converted and they are not in the pay totals.
+    skip_pay = {"George Piekarski"}
+    on_sheet = (set(SHEET) | {"Christian Ellis Blank", "Matthew Laush"}) - {"Nicholas Sommer"}
     people = []
     for name in sorted(on_sheet):
         ps = by.get(name, [])
@@ -431,9 +428,9 @@ def rollup(punches, trips):
         gc_u = sum(p["units"] for p in paid if p["bucket"] == "GC")
         g26_u = sum(p["units"] for p in paid if p["gc26"])
         raw_m = sum(p["minutes"] for p in ps)
-        rate = RATES.get(name)
-        hours = (wd_u + gc_u) / 10
-        wages = q2(hours * rate) if rate is not None else None
+        rate = None if name in skip_pay else RATES.get(name)
+        hours = None if name in skip_pay else (wd_u + gc_u) / 10
+        wages = None if name in skip_pay or rate is None else q2(hours * rate)
         own = [t for t in trips if t["name"] == name]
         miles = sum(t["miles"] or 0 for t in own)
         mileage_amt = q2(sum(t["amount"] or 0 for t in own))
@@ -444,15 +441,15 @@ def rollup(punches, trips):
         note = ASSURITY_NOTE.get(name, "")
         if name == "Matthew Laush" and not ps:
             note = "On the timesheet at 0:00. No punches."
-        if name == "Nicholas Sommer":
-            note = "On the timesheet at 0:00. No rate on file."
+        if name in skip_pay:
+            note = "No rate on file. Hours are not converted and pay is not calculated."
         people.append(
             {
                 "name": name,
                 "punches": ps,
-                "wd": wd_u / 10,
-                "gc": gc_u / 10,
-                "gc26": g26_u / 10,
+                "wd": None if name in skip_pay else wd_u / 10,
+                "gc": None if name in skip_pay else gc_u / 10,
+                "gc26": None if name in skip_pay else g26_u / 10,
                 "hours": hours,
                 "raw": f"{raw_m // 60}:{raw_m % 60:02d}",
                 "rate": rate,
@@ -464,7 +461,7 @@ def rollup(punches, trips):
                 "assurity": ass,
                 "net": net,
                 "trips": own,
-                "missing_rate": rate is None and bool(ps),
+                "missing_rate": name in skip_pay,
                 "note": note,
             }
         )
@@ -491,9 +488,12 @@ def main():
     sum_net = q2(sum(p["net"] for p in paid))
     print(f"punches {len(punches)} wages {sum_wages:.2f} reimb {sum_reimb:.2f} assurity {sum_assur:.2f} net {sum_net:.2f}")
     for p in people:
-        if p["hours"] or p["wages"] or p["reimb"]:
+        if p["raw"] != "0:00" or p["wages"] or p["reimb"]:
+            wd = "—" if p["wd"] is None else f"{p['wd']:5.1f}"
+            gc = "—" if p["gc"] is None else f"{p['gc']:5.1f}"
+            g26 = "—" if p["gc26"] is None else f"{p['gc26']:5.1f}"
             print(
-                f"{p['name']:24} raw {p['raw']:>7} WD {p['wd']:5.1f} GC {p['gc']:5.1f} 26 {p['gc26']:5.1f} "
+                f"{p['name']:24} raw {p['raw']:>7} WD {wd} GC {gc} 26 {g26} "
                 f"wages {p['wages']} reimb {p['reimb']:.2f} ass {p['assurity']:.2f} net {p['net']}"
             )
     for t in trips:
@@ -538,13 +538,13 @@ def main():
                     "",
                     "",
                     p["raw"],
-                    f"{p['hours']:.1f}",
+                    "" if p["hours"] is None else f"{p['hours']:.1f}",
                     "",
                     "",
                     "",
-                    f"{p['wd']:.1f}",
-                    f"{p['gc']:.1f}",
-                    f"{p['gc26']:.1f}",
+                    "" if p["wd"] is None else f"{p['wd']:.1f}",
+                    "" if p["gc"] is None else f"{p['gc']:.1f}",
+                    "" if p["gc26"] is None else f"{p['gc26']:.1f}",
                     "" if p["rate"] is None else f"{p['rate']:.2f}",
                     "" if p["wages"] is None else f"{p['wages']:.2f}",
                     f"{p['mileage']:.2f}",
@@ -589,9 +589,9 @@ def main():
             "<tr>"
             f"<td>{e(p['name'])}</td>"
             f"<td class='num'>{p['raw']}</td>"
-            f"<td class='num'>{p['wd']:.1f}</td>"
-            f"<td class='num'>{p['gc']:.1f}</td>"
-            f"<td class='num'>{p['gc26']:.1f}</td>"
+            f"<td class='num'>{'—' if p['wd'] is None else format(p['wd'], '.1f')}</td>"
+            f"<td class='num'>{'—' if p['gc'] is None else format(p['gc'], '.1f')}</td>"
+            f"<td class='num'>{'—' if p['gc26'] is None else format(p['gc26'], '.1f')}</td>"
             f"<td class='num'>{money(p['rate']) if p['rate'] is not None else '—'}</td>"
             f"<td class='num'>{money(p['wages'])}</td>"
             f"<td class='num'>{money(p['reimb'])}</td>"
@@ -643,18 +643,20 @@ def main():
             gc26 = any(x["gc26"] for x in plist)
             cells = "".join(f"<td class='num'>{fmt_hm(by_day[d])}</td>" for d in days)
             raw_total = sum(by_day.values())
+            tenth_cell = "—" if p["missing_rate"] else f"{tenths / 10:.1f}"
             sheet_rows.append(
                 "<tr>"
                 f"<td>{e(job)} <span class='tag'>{bucket}{' · 26-GC' if gc26 else ''}</span></td>"
-                f"{cells}<td class='num'>{fmt_hm(raw_total)}</td><td class='num'>{tenths / 10:.1f}</td></tr>"
+                f"{cells}<td class='num'>{fmt_hm(raw_total)}</td><td class='num'>{tenth_cell}</td></tr>"
             )
             for punch in plist:
                 note = punch["note"] or "No note on this punch."
                 mark = " Not paid." if punch["exclude"] else ""
+                converted = "" if p["missing_rate"] else f" → {punch['units'] / 10:.1f}"
                 sheet_rows.append(
                     "<tr class='punch-note'><td colspan='10'>"
                     f"<b>{e(punch['date'])}</b> {e(punch['in'])}–{e(punch['out'])} "
-                    f"raw {e(punch['raw'])} → {punch['units'] / 10:.1f}{e(mark)}. {e(note)}"
+                    f"raw {e(punch['raw'])}{converted}{e(mark)}. {e(note)}"
                     "</td></tr>"
                 )
         head = "".join(f"<th>{lab}</th>" for lab in day_labels)
@@ -670,15 +672,24 @@ def main():
         details.append(
             f"<section class='person'><h2>{e(p['name'])}</h2>"
             f"<p>Timesheet hours, with the job-detail note on each punch. "
-            f"WD {p['wd']:.1f} · GC {p['gc']:.1f} · 26-GC {p['gc26']:.1f} · "
-            f"rate {money(p['rate']) if p['rate'] is not None else '—'} · wages {money(p['wages'])} · "
-            f"reimbursements {money(p['reimb'])} · Assurity {money(p['assurity'])} · net {money(p['net'])}</p>"
+            + (
+                "Pay is not calculated."
+                if p["missing_rate"]
+                else (
+                    f"WD {p['wd']:.1f} · GC {p['gc']:.1f} · 26-GC {p['gc26']:.1f} · "
+                    f"rate {money(p['rate']) if p['rate'] is not None else '—'} · wages {money(p['wages'])} · "
+                    f"reimbursements {money(p['reimb'])} · Assurity {money(p['assurity'])} · net {money(p['net'])}"
+                )
+            )
+            + "</p>"
             + "".join(bits)
             + table
             + "</section>"
         )
     jobs = defaultdict(lambda: {"hours": 0.0, "u": 0, "punches": 0, "wages": 0.0, "names": set(), "gc26": 0})
     for p in people:
+        if p["missing_rate"]:
+            continue
         for punch in p["punches"]:
             if punch["exclude"]:
                 continue
@@ -733,13 +744,13 @@ ul {{ margin: 4px 0 8px 18px; }}
 </tbody></table>
 <h2>Read these before the detail</h2>
 <ul>
-<li>George Piekarski has no rate on file. Wages and net are blank. His clock time is 73:45, including a 20:12 punch whose note says “my time is 3 hours billable,” a 0:23 punch whose note says “bill one hour,” a 23:00 punch, and an 11:27 overnight punch. Clock time is what is counted. The notes are not applied as a different hour total.</li>
+<li>George Piekarski and Nicholas Sommer are not calculated. George’s 73:45 stays on his timesheet with the job-detail notes, including the 20:12 punch, the 0:23 punch, the 23:00 punch, and the 11:27 overnight punch. Nicholas Sommer has no punches.</li>
 <li>A customer price in a note ($85 an hour, a $275 trip) is not a pay rate.</li>
 <li>Brecken Bogle’s 3:54 on Tony Arnold is left out of pay. He wrote that the homeowner paid cash.</li>
 <li>Notes that ask for a bonus are not in the net: Nicholas Sturgeon $150, Joe Orona $100. Angel Soto Moya’s note says “Paulina $35hr” on a 4:34 cleaning punch and does not give hours. Nothing was added for that.</li>
 <li>26-WS (Andrew Kelley door modification) is not 26-WD, so those hours are GC. Shaw Butte says “W&amp;D” and does not carry a 26-WD or W/D tag, so it is GC.</li>
 <li>Eric Havins is all WD, including Noble Office. Noble W&amp;D shop time is WD. 26-KB (Mark Kampf) is GC.</li>
-<li>Christian Ellis Blank has no punches. The standing rule is still flat 40 GC hours, $1,750.00. Matthew Laush and Nicholas Sommer are on the timesheet at 0:00.</li>
+<li>Christian Ellis Blank has no punches. The standing rule is still flat 40 GC hours, $1,750.00. Matthew Laush is on the timesheet at 0:00.</li>
 <li>Tony Madalena ($36) and George Rosario ($35) have rates on file. No Assurity premium for them appears on the 11/2 week record, so nothing is withheld. Kelly can confirm.</li>
 <li>Weeks 11/2/2026–11/8/2026 and 11/9/2026–11/15/2026 were not changed. This week is not written into the live ledger.</li>
 </ul>
