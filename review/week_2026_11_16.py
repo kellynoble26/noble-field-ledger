@@ -57,6 +57,10 @@ ASSURITY_NOTE = {
     "Matthew Laush": "No Assurity.",
 }
 FUEL = {"Andy Gomez": 50.0, "Jose Carranza": 50.0}
+# This week only. A separate amount, not wages and not a reimbursement.
+# George Piekarski has no rate, so his wages stay None and he does not receive it.
+# Nicholas Sommer is not on this review.
+THANKSGIVING_BONUS = 100.0
 ALWAYS_WD = {"Eric Havins"}
 WD_RE = re.compile(
     r"26\s*-\s*WD|WD\s*-\s*26|26\s*-\s*WS|W\s*/\s*D|Noble\s+W\s*&\s*D|Noble\s+Windows\s*&\s*Doors",
@@ -419,8 +423,9 @@ def rollup(punches, trips):
                     "mileage": 0.0,
                     "miles": 0.0,
                     "reimb": 0.0,
+                    "bonus": THANKSGIVING_BONUS,
                     "assurity": 0.0,
-                    "net": 1750.0,
+                    "net": q2(1750.0 + THANKSGIVING_BONUS),
                     "trips": [],
                     "missing_rate": False,
                     "note": "Flat 40 hours, all GC. No punches on this timesheet. Standing salary rule.",
@@ -441,7 +446,10 @@ def rollup(punches, trips):
         fuel = FUEL.get(name, 0.0) if ps else 0.0
         reimb = q2(mileage_amt + fuel)
         ass = ASSURITY.get(name, 0.0) if wages else 0.0
-        net = q2(wages + reimb - ass) if wages is not None else None
+        # Wages of None stay uncalculated and get no bonus. A wage of 0.00
+        # (Matthew Laush) is calculated and does receive the bonus.
+        bonus = None if wages is None else THANKSGIVING_BONUS
+        net = q2(wages + reimb + bonus - ass) if wages is not None else None
         note = ASSURITY_NOTE.get(name, "")
         if name == "Matthew Laush" and not ps:
             note = "On the timesheet at 0:00. No punches."
@@ -462,6 +470,7 @@ def rollup(punches, trips):
                 "mileage": mileage_amt,
                 "miles": miles,
                 "reimb": reimb,
+                "bonus": bonus,
                 "assurity": ass,
                 "net": net,
                 "trips": own,
@@ -488,17 +497,25 @@ def main():
     paid = [p for p in people if p["wages"] is not None]
     sum_wages = q2(sum(p["wages"] for p in paid))
     sum_reimb = q2(sum(p["reimb"] for p in paid))
+    sum_bonus = q2(sum(p["bonus"] for p in paid))
     sum_assur = q2(sum(p["assurity"] for p in paid))
     sum_net = q2(sum(p["net"] for p in paid))
-    print(f"punches {len(punches)} wages {sum_wages:.2f} reimb {sum_reimb:.2f} assurity {sum_assur:.2f} net {sum_net:.2f}")
+    recipients = [p["name"] for p in paid if p["bonus"]]
+    print(
+        f"punches {len(punches)} wages {sum_wages:.2f} reimb {sum_reimb:.2f} "
+        f"bonus {sum_bonus:.2f} ({len(recipients)}) assurity {sum_assur:.2f} net {sum_net:.2f}"
+    )
+    print("bonus recipients:", ", ".join(recipients))
     for p in people:
-        if p["raw"] != "0:00" or p["wages"] or p["reimb"]:
+        if p["raw"] != "0:00" or p["wages"] or p["reimb"] or p["bonus"]:
             wd = "—" if p["wd"] is None else f"{p['wd']:5.1f}"
             gc = "—" if p["gc"] is None else f"{p['gc']:5.1f}"
             g26 = "—" if p["gc26"] is None else f"{p['gc26']:5.1f}"
+            bonus_s = "—" if p["bonus"] is None else f"{p['bonus']:.2f}"
             print(
                 f"{p['name']:24} raw {p['raw']:>7} WD {wd} GC {gc} 26 {g26} "
-                f"wages {p['wages']} reimb {p['reimb']:.2f} ass {p['assurity']:.2f} net {p['net']}"
+                f"wages {p['wages']} reimb {p['reimb']:.2f} bonus {bonus_s} "
+                f"ass {p['assurity']:.2f} net {p['net']}"
             )
     for t in trips:
         print("TRIP", t["name"], t["date"], t["miles"], t["amount"], t["evidence"][:80])
@@ -528,6 +545,7 @@ def main():
                 "mileage",
                 "fuel",
                 "reimbursements",
+                "thanksgiving_bonus",
                 "assurity",
                 "net_payable",
                 "notes",
@@ -554,6 +572,7 @@ def main():
                     f"{p['mileage']:.2f}",
                     f"{p['fuel']:.2f}",
                     f"{p['reimb']:.2f}",
+                    "" if p["bonus"] is None else f"{p['bonus']:.2f}",
                     f"{p['assurity']:.2f}",
                     "" if p["net"] is None else f"{p['net']:.2f}",
                     p["note"],
@@ -582,6 +601,7 @@ def main():
                         "",
                         "",
                         "",
+                        "",
                         "excluded" if punch["exclude"] else "",
                         " ".join(punch["flags"] + ([punch["note"]] if punch["note"] else [])),
                     ]
@@ -599,6 +619,7 @@ def main():
             f"<td class='num'>{money(p['rate']) if p['rate'] is not None else '—'}</td>"
             f"<td class='num'>{money(p['wages'])}</td>"
             f"<td class='num'>{money(p['reimb'])}</td>"
+            f"<td class='num'>{money(p['bonus'])}</td>"
             f"<td class='num'>{money(p['assurity'])}</td>"
             f"<td class='num'>{money(p['net'])}</td>"
             "</tr>"
@@ -626,6 +647,7 @@ def main():
             bits.append(f"<p><b>Mileage {money(p['mileage'])}.</b></p><ul>{items}</ul>")
         if p["fuel"]:
             bits.append(f"<p>Fuel stipend {money(p['fuel'])}.</p>")
+        bits.append(f"<p>Thanksgiving bonus {money(p['bonus'])}.</p>")
         # Timesheet shape: one row per job, day columns are the raw hours on the timesheet.
         # Notes from the job-detail punches sit under that row.
         order = []
@@ -682,7 +704,8 @@ def main():
                 else (
                     f"WD {p['wd']:.1f} · GC {p['gc']:.1f} · 26-GC {p['gc26']:.1f} · "
                     f"rate {money(p['rate']) if p['rate'] is not None else '—'} · wages {money(p['wages'])} · "
-                    f"reimbursements {money(p['reimb'])} · Assurity {money(p['assurity'])} · net {money(p['net'])}"
+                    f"reimbursements {money(p['reimb'])} · Thanksgiving bonus {money(p['bonus'])} · "
+                    f"Assurity {money(p['assurity'])} · net {money(p['net'])}"
                 )
             )
             + "</p>"
@@ -738,20 +761,21 @@ ul {{ margin: 4px 0 8px 18px; }}
 <div class="banner">TEST ONLY · DO NOT MERGE · DO NOT DEPLOY · This week is not on the live site.</div>
 <h1>Noble Field Ledger — test review, 11/16/2026 through 11/22/2026</h1>
 <p>ClockShark job-detail report and timesheet, both run 11/23/2026 at 8:43–8:48 AM Arizona time. Noble General Contracting (GC) and Noble Windows &amp; Doors (WD). Not a payment.</p>
-<p>Each contractor section is the timesheet: job, then the hours for 11/16 through 11/22. Under each job are the notes from the job-detail punches that make those hours. Day columns stay in hours and minutes, the same way the timesheet prints them. Pay uses each punch’s own tenth, then adds those tenths. Every contractor’s raw week total matches the timesheet. Breaks are already out of the ClockShark total. 26-GC sits inside GC. Net payable = wages + reimbursements − Assurity. No income tax.</p>
-<p><b>Wages {money(sum_wages)}. Reimbursements {money(sum_reimb)}. Assurity {money(sum_assur)}. Net payable {money(sum_net)}.</b></p>
+<p>Each contractor section is the timesheet: job, then the hours for 11/16 through 11/22. Under each job are the notes from the job-detail punches that make those hours. Day columns stay in hours and minutes, the same way the timesheet prints them. Pay uses each punch’s own tenth, then adds those tenths. Every contractor’s raw week total matches the timesheet. Breaks are already out of the ClockShark total. 26-GC sits inside GC. Net payable = wages + reimbursements + Thanksgiving bonus − Assurity. No income tax.</p>
+<p>Thanksgiving bonus is {money(THANKSGIVING_BONUS)} for each contractor on this week except George Piekarski and Nicholas Sommer. It is not wages and not a reimbursement.</p>
+<p><b>Wages {money(sum_wages)}. Reimbursements {money(sum_reimb)}. Thanksgiving bonus {money(sum_bonus)}. Assurity {money(sum_assur)}. Net payable {money(sum_net)}.</b></p>
 <table>
-<thead><tr><th>Contractor</th><th>Raw</th><th>WD</th><th>GC</th><th>26-GC</th><th>Rate</th><th>Wages</th><th>Reimbursements</th><th>Assurity</th><th>Net payable</th></tr></thead>
+<thead><tr><th>Contractor</th><th>Raw</th><th>WD</th><th>GC</th><th>26-GC</th><th>Rate</th><th>Wages</th><th>Reimbursements</th><th>Thanksgiving bonus</th><th>Assurity</th><th>Net payable</th></tr></thead>
 <tbody>
 {''.join(rows)}
-<tr class="total"><td>Paid total</td><td></td><td></td><td></td><td></td><td></td><td class="num">{money(sum_wages)}</td><td class="num">{money(sum_reimb)}</td><td class="num">{money(sum_assur)}</td><td class="num">{money(sum_net)}</td></tr>
+<tr class="total"><td>Paid total</td><td></td><td></td><td></td><td></td><td></td><td class="num">{money(sum_wages)}</td><td class="num">{money(sum_reimb)}</td><td class="num">{money(sum_bonus)}</td><td class="num">{money(sum_assur)}</td><td class="num">{money(sum_net)}</td></tr>
 </tbody></table>
 <h2>Read these before the detail</h2>
 <ul>
 <li>George Piekarski and Nicholas Sommer are not calculated. George’s 73:45 stays on his timesheet with the job-detail notes, including the 20:12 punch, the 0:23 punch, the 23:00 punch, and the 11:27 overnight punch. Nicholas Sommer has no punches.</li>
 <li>A customer price in a note ($85 an hour, a $275 trip) is not a pay rate.</li>
 <li>Brecken Bogle’s 3:54 on Tony Arnold is left out of pay. He wrote that the homeowner paid cash.</li>
-<li>Notes that ask for a bonus are not in the net: Nicholas Sturgeon $150, Joe Orona $100. Angel Soto Moya’s note says “Paulina $35hr” on a 4:34 cleaning punch and does not give hours. Nothing was added for that.</li>
+<li>Notes that ask for a bonus are not in the net: Nicholas Sturgeon $150, Joe Orona $100. Those notes are separate from the Thanksgiving bonus. Angel Soto Moya’s note says “Paulina $35hr” on a 4:34 cleaning punch and does not give hours. Nothing was added for that.</li>
 <li>26-WS on Andrew Kelley is WD. It is an active Windows &amp; Doors project. Shaw Butte is WD.</li>
 <li>Eric Havins is all WD, including Noble Office. Noble W&amp;D shop time is WD. 26-KB (Mark Kampf) stays GC.</li>
 <li>Christian Ellis Blank has no punches. The standing rule is still flat 40 GC hours, $1,750.00. Matthew Laush is on the timesheet at 0:00.</li>
