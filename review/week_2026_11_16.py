@@ -2,6 +2,7 @@
 # Assurity is always a deduction. Net payable = wages + fuel/mileage/reimbursement + Thanksgiving bonus + piecework bonus + additional lines − Assurity. Never add Assurity to net. This applies to every contractor and to the week total. A contractor with no Assurity stays at $0. Matthew Laush has no Assurity. Do not invent an Assurity amount. Show every Assurity amount as a minus. Do not leave a positive Assurity figure that a reader could add into the net. Assurity is only for contractors who are enrolled, not everyone. Fuel/mileage/reimbursement is the header for mileage and fuel. It is not called a reimbursement. Piecework bonus is the header for the amount a contractor wrote on a punch. Thanksgiving bonus stays Thanksgiving bonus.
 # 26-GC hours are GC hours. Do not show them as a separate total, column, or subtotal. They are already inside GC.
 # Eric Havins is always and forever paid by Windows & Doors, including every hour and his Assurity deduction. His Assurity stays inside the WD Assurity cell.
+# Company split. A contractor with paid WD hours and zero GC hours: Thanksgiving bonus, fuel/mileage/reimbursement, piecework bonus, and Assurity go on the WD row. Eric Havins is always this group. A contractor with paid GC hours and zero WD hours: those same amounts go on the GC row. Matthew Laush has no hours and a $100 Thanksgiving bonus. Keep his $100 in the week Thanksgiving total only. Piecework: Nicholas Sturgeon $150 and Joe Orona $100 are GC-only, so GC piecework is $250.00 and WD piecework is $0.00. Show $0.00, not a dash. Assurity: WD-only enrolled = Andy Gomez $60.49 + Daniel Smalley $60.39 + Eric Havins $48.31 + Jacob Jones $47.29 = −$216.48 on the WD row. GC-only enrolled = Angel Soto Moya $106.39 + Kelly Renner $72.45 = −$178.84 on the GC row. Week stays −$395.32. Fuel: WD is Andy Gomez $50.00 when he is WD-only. GC is Marco Garcia $178.60 + Nicholas Sturgeon $279.60 = $458.20 when they are GC-only. Week $508.20. Thanksgiving: WD-only contractors times $100 on the WD row. GC-only contractors times $100 on the GC row. Matthew Laush $100 is only in the week total. WD + GC + Matthew equals the week Thanksgiving total.
 """Test review for pay week 11/16/2026–11/22/2026.
 
 Reads the ClockShark job-detail report (one row per punch) and checks it
@@ -132,6 +133,15 @@ def deduction_csv(amount):
     return f"-{abs(amount):.2f}"
 
 
+def blue_td(text, num=False, bold=False):
+    """One cell on a WD-only row. The blue is on the td itself."""
+    style = "background:#7eb6e0;color:#000;"
+    if bold:
+        style += "font-weight:700;"
+    cls = " class='num'" if num else ""
+    return f"<td{cls} style='{style}'>{text}</td>"
+
+
 def q2(x):
     return float(Decimal(str(x)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
@@ -165,11 +175,12 @@ def company_wages(wd_hours, gc_hours, rate, wages):
 
 
 def company_pay_side(person):
-    """Company row for Thanksgiving bonus and fuel/mileage/reimbursement.
+    """Company row for Thanksgiving, fuel/mileage/reimbursement, piecework, and Assurity.
 
-    Eric Havins is always Windows & Doors. Anyone else with only WD hours is
-    WD. Anyone with only GC hours is GC. Mixed hours, or no paid hours, stay
-    off both company rows. Piecework bonus is not placed here.
+    Eric Havins is always Windows & Doors. A contractor with paid WD hours and
+    zero GC hours is WD. A contractor with paid GC hours and zero WD hours is
+    GC. Mixed hours, or no paid hours, stay off both company rows. Matthew
+    Laush has no hours, so his Thanksgiving bonus stays in the week total.
     """
     if person.get("additional") or person.get("missing_rate") or person.get("wages") is None:
         return None
@@ -1067,27 +1078,35 @@ def main():
             f"Kelly manual line mismatch GC {kelly['gc']} wages {kelly['wages']} "
             f"assurity {kelly['assurity']} net {kelly['net']} line {kelly.get('manual_line')}"
         )
-    # Company table only. An enrolled contractor with paid WD hours and no
-    # paid GC hours belongs on the WD Assurity cell. Any GC hours stay in
-    # the week total. The GC cell stays blank. This does not change net pay.
+    # Company table only. This does not change any contractor's net.
+    # Paid WD hours and zero GC hours, and Eric Havins: Assurity on the WD row.
+    # Paid GC hours and zero WD hours: Assurity on the GC row.
     wd_assurity_people = []
+    gc_assurity_people = []
     wd_assurity_excluded = []
     for name, amount in ASSURITY.items():
         person = next(p for p in people if p["name"] == name)
-        paid_wd = person["wd"] or 0.0
-        paid_gc = person["gc"] or 0.0
-        # Eric Havins is always on the WD Assurity cell. Do not move his $48.31.
-        if person["name"] in ALWAYS_WD or (paid_wd > 0.001 and paid_gc <= 0.001):
+        side = company_pay_side(person)
+        if side == "WD":
             wd_assurity_people.append(person)
+        elif side == "GC":
+            gc_assurity_people.append(person)
         else:
             wd_assurity_excluded.append(person)
         if abs(person["assurity"] - amount) > 0.001:
             raise SystemExit(f"{name} Assurity changed {person['assurity']}")
     wd_assur = q2(sum((p["assurity"] for p in wd_assurity_people), 0.0))
+    gc_assur = q2(sum((p["assurity"] for p in gc_assurity_people), 0.0))
     held_back = q2(sum((p["assurity"] for p in wd_assurity_excluded), 0.0))
-    if abs(q2(wd_assur + held_back) - sum_assur) > 0.001:
+    added_wd = q2(60.49 + 60.39 + 48.31 + 47.29)
+    added_gc = q2(106.39 + 72.45)
+    if abs(added_wd - 216.48) > 0.001 or abs(added_gc - 178.84) > 0.001:
+        raise SystemExit(f"Assurity addition failed WD {added_wd} GC {added_gc}")
+    if abs(q2(added_wd + added_gc) - 395.32) > 0.001:
+        raise SystemExit(f"Assurity WD + GC {q2(added_wd + added_gc)} != 395.32")
+    if abs(q2(wd_assur + gc_assur + held_back) - sum_assur) > 0.001:
         raise SystemExit(
-            f"WD Assurity {wd_assur} plus the rest {held_back} != week {sum_assur}"
+            f"Assurity WD {wd_assur} GC {gc_assur} plus the rest {held_back} != week {sum_assur}"
         )
     for person in wd_assurity_people:
         if person["name"] in ALWAYS_WD:
@@ -1106,12 +1125,26 @@ def main():
         "Daniel Smalley",
         "Eric Havins",
         "Jacob Jones",
-    ] or abs(wd_assur - 216.48) > 0.001:
+    ] or abs(wd_assur - 216.48) > 0.001 or abs(wd_assur - added_wd) > 0.001:
         raise SystemExit(
             f"WD Assurity placement changed {wd_assur} "
             f"{[person['name'] for person in wd_assurity_people]}"
         )
-    wd_assurity_cell = deduction(wd_assur) if wd_assurity_people else "—"
+    if [person["name"] for person in gc_assurity_people] != [
+        "Angel Soto Moya",
+        "Kelly Renner",
+    ] or abs(gc_assur - 178.84) > 0.001 or abs(gc_assur - added_gc) > 0.001:
+        raise SystemExit(
+            f"GC Assurity placement changed {gc_assur} "
+            f"{[person['name'] for person in gc_assurity_people]}"
+        )
+    if held_back:
+        raise SystemExit(
+            "Assurity left off both company rows: "
+            + ", ".join(person["name"] for person in wd_assurity_excluded)
+        )
+    wd_assurity_cell = deduction(wd_assur)
+    gc_assurity_cell = deduction(gc_assur)
     if wd_assurity_people:
         shown = [e(person["name"]) for person in wd_assurity_people]
         if len(shown) == 1:
@@ -1123,9 +1156,10 @@ def main():
         wd_assurity_sentence = f"The WD Assurity figure includes contractors {who}."
     else:
         wd_assurity_sentence = "The WD Assurity figure includes no contractor this week."
-    # Thanksgiving and fuel/mileage/reimbursement follow the same company split.
-    # Piecework bonus stays on the week row. Matthew has no paid hours, so his
-    # Thanksgiving stays in the week total and off both company rows.
+    # Thanksgiving, fuel/mileage/reimbursement, piecework, and Assurity follow
+    # the same company split. Matthew has no paid hours, so his Thanksgiving
+    # stays in the week total and off both company rows. A zero company amount
+    # is $0.00, not a dash.
     wd_side = []
     gc_side = []
     left_off = []
@@ -1141,6 +1175,13 @@ def main():
     gc_reimb = q2(sum((person["reimb"] for person in gc_side), 0.0))
     wd_thanks = q2(sum((person["bonus"] or 0 for person in wd_side), 0.0))
     gc_thanks = q2(sum((person["bonus"] or 0 for person in gc_side), 0.0))
+    wd_piece = q2(sum((person["note_bonus"] or 0 for person in wd_side), 0.0))
+    gc_piece = q2(sum((person["note_bonus"] or 0 for person in gc_side), 0.0))
+    off_piece = q2(sum((person["note_bonus"] or 0 for person in left_off), 0.0))
+    if abs(q2(wd_piece + gc_piece + off_piece) - sum_note) > 0.001:
+        raise SystemExit(
+            f"piecework split WD {wd_piece} GC {gc_piece} off {off_piece} != {sum_note}"
+        )
     mixed_off = [
         person
         for person in left_off
@@ -1172,6 +1213,32 @@ def main():
         raise SystemExit(f"Marco Garcia fuel was not placed on GC {marco['reimb']}")
     if company_pay_side(nicholas) != "GC" or abs(nicholas["reimb"] - 279.60) > 0.001:
         raise SystemExit(f"Nicholas Sturgeon fuel was not placed on GC {nicholas['reimb']}")
+    if abs(q2(178.60 + 279.60) - 458.20) > 0.001 or abs(gc_reimb - 458.20) > 0.001:
+        raise SystemExit(f"GC fuel {gc_reimb} != Marco 178.60 + Nicholas 279.60")
+    if abs(wd_reimb - 50.0) > 0.001 or abs(q2(wd_reimb + gc_reimb) - 508.20) > 0.001:
+        raise SystemExit(f"fuel WD {wd_reimb} GC {gc_reimb} != week 508.20")
+    if (
+        company_pay_side(nicholas) != "GC"
+        or company_pay_side(joe) != "GC"
+        or abs(nicholas["note_bonus"] - 150.0) > 0.001
+        or abs(joe["note_bonus"] - 100.0) > 0.001
+        or abs(gc_piece - 250.0) > 0.001
+        or abs(wd_piece) > 0.001
+        or abs(off_piece) > 0.001
+    ):
+        raise SystemExit(
+            f"piecework split WD {wd_piece} GC {gc_piece} off {off_piece} "
+            f"Nicholas {nicholas['note_bonus']} Joe {joe['note_bonus']}"
+        )
+    wd_thanks_names = [person["name"] for person in wd_side if (person["bonus"] or 0) > 0.001]
+    gc_thanks_names = [person["name"] for person in gc_side if (person["bonus"] or 0) > 0.001]
+    if len(wd_thanks_names) == 5 and abs(wd_thanks - 500.0) > 0.001:
+        raise SystemExit(f"five WD Thanksgiving contractors total {wd_thanks}")
+    if abs(q2(wd_thanks + gc_thanks + matthew["bonus"]) - 1900.0) > 0.001:
+        raise SystemExit(
+            f"Thanksgiving WD {wd_thanks} ({len(wd_thanks_names)}) + "
+            f"GC {gc_thanks} ({len(gc_thanks_names)}) + Matthew != 1900.00"
+        )
     blocked_highlight = {
         "Matthew Laush",
         "George Piekarski",
@@ -1221,9 +1288,15 @@ def main():
     print(
         f"WD hours {sum_wd_hours:.1f} wages {sum_wd_wages:.2f} "
         f"fuel {wd_reimb:.2f} Thanksgiving {wd_thanks:.2f} "
+        f"piecework {wd_piece:.2f} assurity {deduction(wd_assur)} "
         f"GC hours {sum_gc_hours:.1f} wages {sum_gc_wages:.2f} "
         f"fuel {gc_reimb:.2f} Thanksgiving {gc_thanks:.2f} "
+        f"piecework {gc_piece:.2f} assurity {deduction(gc_assur)} "
         f"paid hours {sum_paid_hours:.1f}"
+    )
+    print(
+        f"Thanksgiving WD {len(wd_thanks_names)}: {', '.join(wd_thanks_names)} | "
+        f"GC {len(gc_thanks_names)}: {', '.join(gc_thanks_names)}"
     )
     print("WD highlight:", ", ".join(highlighted))
     print("left off both company rows:", ", ".join(person["name"] for person in left_off) or "none")
@@ -1358,26 +1431,30 @@ def main():
                     ]
                 )
         wd_assurity_names = ", ".join(p["name"] for p in wd_assurity_people)
+        gc_assurity_names = ", ".join(p["name"] for p in gc_assurity_people)
         mixed_names = ", ".join(person["name"] for person in mixed_off)
         no_hour_names = ", ".join(person["name"] for person in no_hours_off)
         company_note = (
-            "Fuel/mileage/reimbursement and Thanksgiving bonus are split onto the company "
-            "row for a contractor paid only through that company. "
+            "A contractor with paid WD hours and zero GC hours has Thanksgiving bonus, "
+            "fuel/mileage/reimbursement, piecework bonus, and Assurity on the WD row. "
             "Eric Havins is always and forever paid by Windows & Doors, including every hour "
             "and his Assurity deduction. "
+            "A contractor with paid GC hours and zero WD hours has those same amounts on the GC row. "
             f"WD fuel/mileage/reimbursement {wd_reimb:.2f}. WD Thanksgiving {wd_thanks:.2f}. "
+            f"WD piecework {wd_piece:.2f}. WD Assurity {deduction_csv(wd_assur)}. "
             f"GC fuel/mileage/reimbursement {gc_reimb:.2f}. GC Thanksgiving {gc_thanks:.2f}. "
-            "Piecework bonus stays on the week row. "
+            f"GC piecework {gc_piece:.2f}. GC Assurity {deduction_csv(gc_assur)}. "
             f"Left off both company rows with no paid hours: {no_hour_names}. "
             + (f"Left off both company rows with mixed hours: {mixed_names}. " if mixed_names else "")
-            + "That Thanksgiving bonus stays in the week total. "
+            + "Matthew Laush $100 Thanksgiving bonus has no hours, so it is only in the week total. "
             "The WD Assurity cell is the deduction for enrolled contractors with only "
             f"Windows & Doors hours: {wd_assurity_names}. "
             "Eric Havins stays inside that cell. "
-            "A contractor with any GC hours is left out of that cell. "
-            "The GC Assurity cell stays blank. "
+            "The GC Assurity cell is the deduction for enrolled contractors with only "
+            f"GC hours: {gc_assurity_names}. "
             "The week row shows the full fuel/mileage/reimbursement, Thanksgiving bonus, "
             "piecework bonus, and Assurity deduction. "
+            "A company amount of zero is 0.00, not a blank. "
             "Assurity is subtracted from net payable and is not company wages. "
             "George Piekarski is not included. Paulina and Esias stay additional and are not "
             "in the company wage cells. "
@@ -1394,10 +1471,12 @@ def main():
             f"Wages {sum_wages:.2f}. "
             f"Assurity deduction {deduction_csv(sum_assur)}. "
             f"WD fuel/mileage/reimbursement {wd_reimb:.2f}. WD Thanksgiving {wd_thanks:.2f}. "
+            f"WD piecework {wd_piece:.2f}. WD Assurity {deduction_csv(wd_assur)}. "
             f"GC fuel/mileage/reimbursement {gc_reimb:.2f}. GC Thanksgiving {gc_thanks:.2f}. "
-            "Piecework bonus stays on the week row. "
-            "The WD company row shows only contractors paid through Windows & Doors. "
-            "The GC Assurity cell stays blank. "
+            f"GC piecework {gc_piece:.2f}. GC Assurity {deduction_csv(gc_assur)}. "
+            "Matthew Laush $100 Thanksgiving bonus has no hours, so it is only in the week total. "
+            "The WD company row shows contractors paid through Windows & Doors. "
+            "The GC company row shows contractors paid through Noble General Contracting. "
             "Additional lines stay additional and are not in the wage cell. "
             f"Net payable {sum_net:.2f} is wages + fuel/mileage/reimbursement + "
             "Thanksgiving bonus + piecework bonus + additional lines − Assurity."
@@ -1423,8 +1502,8 @@ def main():
                 "",
                 f"{wd_reimb:.2f}",
                 f"{wd_thanks:.2f}",
-                "",
-                deduction_csv(wd_assur) if wd_assurity_people else "",
+                f"{wd_piece:.2f}",
+                deduction_csv(wd_assur),
                 "",
                 company_note,
             ]
@@ -1450,8 +1529,8 @@ def main():
                 "",
                 f"{gc_reimb:.2f}",
                 f"{gc_thanks:.2f}",
-                "",
-                "",
+                f"{gc_piece:.2f}",
+                deduction_csv(gc_assur),
                 "",
                 company_note,
             ]
@@ -1519,26 +1598,34 @@ def main():
         classes = []
         if p.get("additional"):
             classes.append("additional")
-        elif company_pay_side(p) == "WD":
+        wd_only = company_pay_side(p) == "WD"
+        if wd_only:
             classes.append("wd-only")
         row_class = f" class='{' '.join(classes)}'" if classes else ""
-        rows.append(
-            f"<tr{row_class}>"
-            f"<td>{e(p['name'])}{tag}</td>"
-            f"<td class='num'>{e(p.get('raw_display') or p['raw'])}</td>"
-            f"<td class='num'>{'—' if p['wd'] is None else format(p['wd'], '.1f')}</td>"
-            f"<td class='num'>{money(p.get('wd_wages'))}</td>"
-            f"<td class='num'>{'—' if p['gc'] is None else format(p['gc'], '.1f')}</td>"
-            f"<td class='num'>{money(p.get('gc_wages'))}</td>"
-            f"<td class='num'>{money(p['rate']) if p['rate'] is not None else '—'}</td>"
-            f"<td class='num'>{money(p['wages'])}</td>"
-            f"<td class='num'>{money(p['reimb'])}</td>"
-            f"<td class='num'>{money(p['bonus'])}</td>"
-            f"<td class='num'>{money(p['note_bonus'])}</td>"
-            f"<td class='num'>{deduction(p['assurity'])}</td>"
-            f"<td class='num'>{money(p['net'])}</td>"
-            "</tr>"
-        )
+        name = f"<b>{e(p['name'])}</b>" if wd_only else e(p["name"])
+        values = [
+            (f"{name}{tag}", False, True),
+            (e(p.get("raw_display") or p["raw"]), True, False),
+            ("—" if p["wd"] is None else format(p["wd"], ".1f"), True, False),
+            (money(p.get("wd_wages")), True, False),
+            ("—" if p["gc"] is None else format(p["gc"], ".1f"), True, False),
+            (money(p.get("gc_wages")), True, False),
+            (money(p["rate"]) if p["rate"] is not None else "—", True, False),
+            (money(p["wages"]), True, False),
+            (money(p["reimb"]), True, False),
+            (money(p["bonus"]), True, False),
+            (money(p["note_bonus"]), True, False),
+            (deduction(p["assurity"]), True, False),
+            (money(p["net"]), True, False),
+        ]
+        if wd_only:
+            tds = "".join(blue_td(text, num=num, bold=bold) for text, num, bold in values)
+        else:
+            tds = "".join(
+                f"<td class='num'>{text}</td>" if num else f"<td>{text}</td>"
+                for text, num, _bold in values
+            )
+        rows.append(f"<tr{row_class}>{tds}</tr>")
         if p.get("manual_line"):
             rows.append(
                 "<tr class='manual'>"
@@ -1618,14 +1705,25 @@ def main():
                 if not punch["exclude"]:
                     tenths += punch["units"]
             bucket = plist[0]["bucket"]
-            cells = "".join(f"<td class='num'>{fmt_hm(by_day[d])}</td>" for d in days)
             raw_total = sum(by_day.values())
             tenth_cell = "—" if p["missing_rate"] else f"{tenths / 10:.1f}"
-            sheet_rows.append(
-                "<tr>"
-                f"<td>{e(job)} <span class='tag'>{bucket}</span></td>"
-                f"{cells}<td class='num'>{fmt_hm(raw_total)}</td><td class='num'>{tenth_cell}</td></tr>"
-            )
+            if bucket == "WD":
+                cells = "".join(blue_td(fmt_hm(by_day[d]), num=True) for d in days)
+                sheet_rows.append(
+                    "<tr class='wd-only'>"
+                    + blue_td(f"{e(job)} <span class='tag'>{bucket}</span>")
+                    + cells
+                    + blue_td(fmt_hm(raw_total), num=True)
+                    + blue_td(tenth_cell, num=True)
+                    + "</tr>"
+                )
+            else:
+                cells = "".join(f"<td class='num'>{fmt_hm(by_day[d])}</td>" for d in days)
+                sheet_rows.append(
+                    "<tr>"
+                    f"<td>{e(job)} <span class='tag'>{bucket}</span></td>"
+                    f"{cells}<td class='num'>{fmt_hm(raw_total)}</td><td class='num'>{tenth_cell}</td></tr>"
+                )
             for punch in plist:
                 note = punch["note"] or "No note on this punch."
                 mark = " Not paid." if punch["exclude"] else ""
@@ -1745,12 +1843,26 @@ tr.total td {{ background: #f5f5f4; font-weight: 700; }}
 tr.additional td {{ background: #f8fafc; }}
 tr.manual td {{ background: #fff7ed; }}
 tr.punch-note td {{ background: #fafaf9; color: #444; }}
-tr.wd-only td {{ background: #d6e8f5; color: #1c1917; }}
+tr.wd-only td {{ background: #7eb6e0 !important; color: #000 !important; }}
+tr.wd-only td .tag {{ color: #000 !important; }}
 .tag {{ color: #1f4e79; font-size: 10px; }}
 .note {{ color: #444; }}
+h2.company-summary {{ font-size: 22px; color: #000; margin: 0 0 4px; }}
+.updated {{ font-size: 18px; font-weight: 700; color: #000; margin: 0 0 8px; }}
+.wd-legend {{ font-size: 22px; line-height: 1.3; font-weight: 700; color: #000; background: #7eb6e0; padding: 10px 12px; margin: 16px 0 8px; }}
 .person {{ page-break-before: always; }}
 ul {{ margin: 4px 0 8px 18px; }}
 </style></head><body>
+<h2 class="company-summary">Company summary</h2>
+<p class="updated">Updated 11/23/2026 4:00 PM Arizona</p>
+<table>
+<thead><tr><th>Company</th><th>Hours</th><th>Fuel/mileage/reimbursement</th><th>Thanksgiving bonus</th><th>Piecework bonus</th><th>Wages</th><th>Assurity</th></tr></thead>
+<tbody>
+<tr class="wd-only">{blue_td("<b>WD</b>")}{blue_td(f"{sum_wd_hours:.1f}", num=True)}{blue_td(money(wd_reimb), num=True)}{blue_td(money(wd_thanks), num=True)}{blue_td(money(wd_piece), num=True)}{blue_td(money(sum_wd_wages), num=True)}{blue_td(wd_assurity_cell, num=True)}</tr>
+<tr><td>GC</td><td class="num">{sum_gc_hours:.1f}</td><td class="num">{money(gc_reimb)}</td><td class="num">{money(gc_thanks)}</td><td class="num">{money(gc_piece)}</td><td class="num">{money(sum_gc_wages)}</td><td class="num">{gc_assurity_cell}</td></tr>
+<tr class="total"><td>Week</td><td class="num">{sum_paid_hours:.1f}</td><td class="num">{money(sum_reimb)}</td><td class="num">{money(sum_bonus)}</td><td class="num">{money(sum_note)}</td><td class="num">{money(sum_wages)}</td><td class="num">{deduction(sum_assur)}</td></tr>
+</tbody></table>
+<p>Matthew Laush $100 Thanksgiving bonus has no hours, so it is only in the week total.</p>
 <div class="banner">TEST ONLY · DO NOT MERGE · DO NOT DEPLOY · This week is not on the live site.</div>
 <h1>Noble Field Ledger — test review, 11/16/2026 through 11/22/2026</h1>
 <p>ClockShark job-detail report and timesheet, both run 11/23/2026 at 8:43–8:48 AM Arizona time. Noble General Contracting (GC) and Noble Windows &amp; Doors (WD). Not a payment.</p>
@@ -1759,17 +1871,8 @@ ul {{ margin: 4px 0 8px 18px; }}
 <p>Piecework bonus is the amount a contractor wrote on a punch, paid as its own line. It is not the Thanksgiving bonus and it is not wages. Nicholas Sturgeon {money(note_bonus_amounts['Nicholas Sturgeon'])} from his {e(note_bonus_evidence['Nicholas Sturgeon'][0]['date'])} note. Joe Orona {money(note_bonus_amounts['Joe Orona'])} from his {e(note_bonus_evidence['Joe Orona'][0]['date'])} note. Every other calculated contractor is $0.00. George Piekarski, Nicholas Sommer, Exceptional Cleaning Services/Paulina Moya, and Angel Soto - Helper Esias do not receive a piecework bonus.</p>
 <p>Additional lines, each on its own row after Angel Soto Moya, bucket additional, not WD and not GC. Exceptional Cleaning Services/Paulina Moya: raw 4:34 converted to 4.5 at $35.00 = {money(extras[0]['wages'])}. Angel Soto - Helper Esias: 20.7 hours, already converted, at $15.00 = {money(extras[1]['wages'])}. No Assurity, no fuel, no mileage, no Thanksgiving bonus, and no piecework bonus. Neither amount is in Angel Soto Moya’s hours, wages, or net.</p>
 <p><b>Wages {money(sum_wages)}. Fuel/mileage/reimbursement {money(sum_reimb)}. Thanksgiving bonus {money(sum_bonus)}. Piecework bonus {money(sum_note)}. Additional lines {money(sum_additional)} (Paulina {money(extras[0]['wages'])} and Esias {money(extras[1]['wages'])}). Assurity deduction {deduction(sum_assur)}. Net payable {money(sum_net)}.</b> Net payable = wages {money(sum_wages)} + fuel/mileage/reimbursement {money(sum_reimb)} + Thanksgiving {money(sum_bonus)} + piecework bonus {money(sum_note)} + additional lines {money(sum_additional)} (Paulina {money(extras[0]['wages'])} and Esias {money(extras[1]['wages'])}) − Assurity {money(sum_assur)} = net payable {money(sum_net)}.</p>
-<p><b>WD total {sum_wd_hours:.1f} hours, {money(sum_wd_wages)}. GC total {sum_gc_hours:.1f} hours, {money(sum_gc_wages)}.</b> Fuel/mileage/reimbursement and Thanksgiving bonus are split onto the company row for a contractor paid only through that company. Piecework bonus stays on the week row. The WD Assurity cell shows the deduction for enrolled contractors who have only Windows &amp; Doors hours. Eric Havins is always paid by Windows &amp; Doors, including his Assurity deduction. The week row still shows the full totals. Assurity is not company wages. Additional lines stay additional and are not in these wage cells.</p>
-<table>
-<thead><tr><th>Company</th><th>Hours</th><th>Fuel/mileage/reimbursement</th><th>Thanksgiving bonus</th><th>Piecework bonus</th><th>Wages</th><th>Assurity</th></tr></thead>
-<tbody>
-<tr class="wd-only"><td>WD · Noble Windows &amp; Doors</td><td class="num">{sum_wd_hours:.1f}</td><td class="num">{money(wd_reimb)}</td><td class="num">{money(wd_thanks)}</td><td class="num">—</td><td class="num">{money(sum_wd_wages)}</td><td class="num">{wd_assurity_cell}</td></tr>
-<tr><td>GC · Noble General Contracting</td><td class="num">{sum_gc_hours:.1f}</td><td class="num">{money(gc_reimb)}</td><td class="num">{money(gc_thanks)}</td><td class="num">—</td><td class="num">{money(sum_gc_wages)}</td><td class="num">—</td></tr>
-<tr class="total"><td>Week</td><td class="num">{sum_paid_hours:.1f}</td><td class="num">{money(sum_reimb)}</td><td class="num">{money(sum_bonus)}</td><td class="num">{money(sum_note)}</td><td class="num">{money(sum_wages)}</td><td class="num">{deduction(sum_assur)}</td></tr>
-</tbody></table>
-<p>{wd_assurity_sentence}</p>
-<p>{left_off_sentence}</p>
-<p>A blue row is paid only through Windows &amp; Doors.</p>
+<p><b>WD total {sum_wd_hours:.1f} hours, {money(sum_wd_wages)}. GC total {sum_gc_hours:.1f} hours, {money(sum_gc_wages)}.</b> The company summary is the first table on this page. A contractor with paid WD hours and zero GC hours has Thanksgiving bonus, fuel/mileage/reimbursement, piecework bonus, and Assurity on the WD row. Eric Havins is always that group. A contractor with paid GC hours and zero WD hours has those same amounts on the GC row. WD piecework is {money(wd_piece)} and GC piecework is {money(gc_piece)}. WD Assurity is {wd_assurity_cell} and GC Assurity is {gc_assurity_cell}. Matthew Laush’s $100 Thanksgiving bonus has no hours, so it is only in the week total. Assurity is a deduction and is not company wages. Additional lines stay additional and are not in these wage cells.</p>
+<p class="wd-legend">Blue rows are paid only through Windows &amp; Doors.</p>
 <table>
 <thead><tr><th>Contractor</th><th>Raw</th><th>WD hours</th><th>WD wages</th><th>GC hours</th><th>GC wages</th><th>Rate</th><th>Wages</th><th>Fuel/mileage/reimbursement</th><th>Thanksgiving bonus</th><th>Piecework bonus</th><th>Assurity deduction</th><th>Net payable</th></tr></thead>
 <tbody>
