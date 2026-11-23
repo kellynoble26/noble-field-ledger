@@ -68,6 +68,9 @@ WD_RE = re.compile(
 )
 GC26_RE = re.compile(r"26\s*-\s*GC", re.I)
 MILE_RE = re.compile(r"(?<![\d.])(\d{1,4}(?:\.\d+)?)\s*miles?\b", re.I)
+# A bonus written on the contractor's own punch. Not the Thanksgiving bonus.
+NOTE_BONUS_RE = re.compile(r"\$(\d+(?:\.\d{1,2})?)\s*bonus\b", re.I)
+NOTE_BONUS_NAMES = {"Nicholas Sturgeon", "Joe Orona"}
 PAIR_RE = re.compile(r"(?<![\d.])(\d{5,6})\s*[-–—]\s*(\d{5,6})(?!\d)")
 SINGLE_RE = re.compile(r"(?<![\d.])(\d{5,6})(?!\d)")
 CLOCK_RE = re.compile(r"\d{1,2}:\d{2}\s*[AP]M")
@@ -267,7 +270,11 @@ def load_punches():
                 flags.append("0:01 counts as 0.0 and stays on the list.")
             if minutes >= 14 * 60:
                 flags.append("Long punch. Clock time is counted. See the note.")
-            if re.search(r"billable|bill one hour|bonus|\$35", note_s, re.I):
+            if NOTE_BONUS_RE.search(note_s) and who in NOTE_BONUS_NAMES:
+                flags.append(
+                    "Note bonus is included as its own line. Separate from the Thanksgiving bonus."
+                )
+            elif re.search(r"billable|bill one hour|bonus|\$35", note_s, re.I):
                 flags.append("Note mentions pay or a customer price. Not added to the net.")
             wd = (
                 who in ALWAYS_WD
@@ -396,7 +403,49 @@ def mileage(punches):
     return trips
 
 
-def rollup(punches, trips):
+def note_bonuses(punches):
+    """Dollar amount each allowed contractor wrote as '$N bonus' on a punch.
+
+    The amount comes from the note. It is not added to hours and it is not
+    the Thanksgiving bonus. George Piekarski, Nicholas Sommer, Paulina, and
+    Esias do not receive one.
+    """
+    found = defaultdict(list)
+    for punch in punches:
+        if punch["exclude"] or not punch["note"]:
+            continue
+        hits = NOTE_BONUS_RE.findall(punch["note"])
+        if not hits:
+            continue
+        if punch["name"] not in NOTE_BONUS_NAMES:
+            raise SystemExit(
+                "A note bonus was found for "
+                f"{punch['name']}, who does not receive one: {punch['note']}"
+            )
+        for raw in hits:
+            found[punch["name"]].append(
+                {
+                    "amount": q2(raw),
+                    "date": punch["date"],
+                    "in": punch["in"],
+                    "out": punch["out"],
+                    "job": punch["job"],
+                    "note": punch["note"],
+                }
+            )
+    if set(found) != NOTE_BONUS_NAMES:
+        raise SystemExit(
+            f"Expected note bonuses for {sorted(NOTE_BONUS_NAMES)}, found {sorted(found)}"
+        )
+    amounts = {}
+    for name, items in found.items():
+        if len(items) != 1:
+            raise SystemExit(f"{name} has {len(items)} note-bonus punches")
+        amounts[name] = items[0]["amount"]
+    return amounts, found
+
+
+def rollup(punches, trips, note_bonus_amounts, note_bonus_evidence):
     by = defaultdict(list)
     for p in punches:
         by[p["name"]].append(p)
@@ -424,6 +473,8 @@ def rollup(punches, trips):
                     "miles": 0.0,
                     "reimb": 0.0,
                     "bonus": THANKSGIVING_BONUS,
+                    "note_bonus": 0.0,
+                    "note_bonus_evidence": [],
                     "assurity": 0.0,
                     "net": q2(1750.0 + THANKSGIVING_BONUS),
                     "trips": [],
@@ -447,9 +498,16 @@ def rollup(punches, trips):
         reimb = q2(mileage_amt + fuel)
         ass = ASSURITY.get(name, 0.0) if wages else 0.0
         # Wages of None stay uncalculated and get no bonus. A wage of 0.00
-        # (Matthew Laush) is calculated and does receive the bonus.
+        # (Matthew Laush) is calculated and does receive the Thanksgiving bonus.
+        # Note bonus is separate: $0.00 unless this contractor's punch asks for one.
         bonus = None if wages is None else THANKSGIVING_BONUS
-        net = q2(wages + reimb + bonus - ass) if wages is not None else None
+        note_bonus = None if wages is None else note_bonus_amounts.get(name, 0.0)
+        evidence = [] if wages is None else note_bonus_evidence.get(name, [])
+        net = (
+            q2(wages + reimb + bonus + note_bonus - ass)
+            if wages is not None
+            else None
+        )
         note = ASSURITY_NOTE.get(name, "")
         if name == "Matthew Laush" and not ps:
             note = "On the timesheet at 0:00. No punches."
@@ -471,6 +529,8 @@ def rollup(punches, trips):
                 "miles": miles,
                 "reimb": reimb,
                 "bonus": bonus,
+                "note_bonus": note_bonus,
+                "note_bonus_evidence": evidence,
                 "assurity": ass,
                 "net": net,
                 "trips": own,
@@ -528,6 +588,8 @@ def additional_pay(punches):
             "miles": 0.0,
             "reimb": 0.0,
             "bonus": None,
+            "note_bonus": None,
+            "note_bonus_evidence": [],
             "assurity": 0.0,
             "net": wages,
             "trips": [],
@@ -544,14 +606,14 @@ def additional_pay(punches):
         f"The note says: {paulina['note']}. "
         "Rate $35.00. Wages $157.50. Net $157.50. "
         "Bucket additional, not WD and not GC. "
-        "No Assurity, no fuel, no mileage, and no Thanksgiving bonus."
+        "No Assurity, no fuel, no mileage, no Thanksgiving bonus, and no note bonus."
     )
     esias_note = (
         "Additional line. Not ClockShark wages and not in Angel Soto Moya’s net. "
         "Hours are 20.7, already converted, and are not converted again. "
         "Rate $15.00. Wages $310.50. Net $310.50. "
         "Bucket additional, not WD and not GC. "
-        "No Assurity, no fuel, no mileage, and no Thanksgiving bonus. "
+        "No Assurity, no fuel, no mileage, no Thanksgiving bonus, and no note bonus. "
         "Angel Soto Moya’s punches that say Esias was there the same time stay on his timesheet. "
         "These hours are not added to his WD, GC, wages, or net."
     )
@@ -588,8 +650,9 @@ def main():
     for name, sm in SHEET.items():
         if tot[name] != parse_hm(sm):
             raise SystemExit(f"{name} {tot[name]} != sheet {sm}")
+    note_bonus_amounts, note_bonus_evidence = note_bonuses(punches)
     trips = mileage(punches)
-    people = rollup(punches, trips)
+    people = rollup(punches, trips, note_bonus_amounts, note_bonus_evidence)
     extras = additional_pay(punches)
     merged = []
     found_angel = False
@@ -613,6 +676,7 @@ def main():
     sum_wages = q2(sum(p["wages"] for p in clock))
     sum_reimb = q2(sum(p["reimb"] for p in clock))
     sum_bonus = q2(sum(p["bonus"] or 0 for p in clock))
+    sum_note = q2(sum(p["note_bonus"] or 0 for p in clock))
     sum_assur = q2(sum(p["assurity"] for p in clock))
     sum_additional = q2(sum(p["net"] for p in additional))
     sum_clock_net = q2(sum(p["net"] for p in clock))
@@ -623,24 +687,65 @@ def main():
     angel = next(p for p in people if p["name"] == "Angel Soto Moya")
     if angel["wages"] != 2037.0 or angel["hours"] != 48.5 or abs(angel["net"] - 2030.61) > 0.001:
         raise SystemExit(f"Angel’s own pay changed: {angel['hours']} {angel['wages']} {angel['net']}")
-    if abs(sum_wages - 24300.30) > 0.001 or abs(sum_additional - 468.00) > 0.001 or abs(sum_net - 26905.74) > 0.001:
-        raise SystemExit(f"totals wages {sum_wages} additional {sum_additional} net {sum_net}")
+    if angel.get("note_bonus"):
+        raise SystemExit("Angel Soto Moya was given a note bonus")
+    for p in clock:
+        expect = q2(p["wages"] + p["reimb"] + p["bonus"] + p["note_bonus"] - p["assurity"])
+        if abs(p["net"] - expect) > 0.001:
+            raise SystemExit(f"{p['name']} net {p['net']} != {expect}")
+    blocked = {
+        "George Piekarski",
+        "Exceptional Cleaning Services/Paulina Moya",
+        "Angel Soto - Helper Esias",
+    }
+    for p in people:
+        if p["name"] in blocked and p.get("note_bonus"):
+            raise SystemExit(f"{p['name']} was given a note bonus")
+        if p["name"] not in NOTE_BONUS_NAMES and p.get("note_bonus"):
+            raise SystemExit(f"Unexpected note bonus for {p['name']}: {p['note_bonus']}")
+    for name, amount in note_bonus_amounts.items():
+        person = next(p for p in people if p["name"] == name)
+        if person["note_bonus"] != amount or person["bonus"] != THANKSGIVING_BONUS:
+            raise SystemExit(
+                f"{name} Thanksgiving {person['bonus']} note bonus {person['note_bonus']}"
+            )
+    if (
+        abs(sum_wages - 24300.30) > 0.001
+        or abs(sum_reimb - 632.76) > 0.001
+        or abs(sum_bonus - 1900.00) > 0.001
+        or abs(sum_additional - 468.00) > 0.001
+        or abs(sum_assur - 395.32) > 0.001
+    ):
+        raise SystemExit(
+            f"totals wages {sum_wages} reimb {sum_reimb} bonus {sum_bonus} "
+            f"additional {sum_additional} assurity {sum_assur}"
+        )
+    prior_net = q2(sum_wages + sum_reimb + sum_bonus + sum_additional - sum_assur)
+    if abs(prior_net - 26905.74) > 0.001:
+        raise SystemExit(f"base net moved {prior_net}")
+    if abs(sum_net - q2(prior_net + sum_note)) > 0.001:
+        raise SystemExit(f"net {sum_net} != {prior_net} + note bonus {sum_note}")
     print(
         f"punches {len(punches)} wages {sum_wages:.2f} reimb {sum_reimb:.2f} "
-        f"bonus {sum_bonus:.2f} ({len(recipients)}) additional {sum_additional:.2f} "
+        f"bonus {sum_bonus:.2f} ({len(recipients)}) note {sum_note:.2f} "
+        f"additional {sum_additional:.2f} "
         f"assurity {sum_assur:.2f} clock net {sum_clock_net:.2f} net {sum_net:.2f}"
     )
     print("bonus recipients:", ", ".join(recipients))
+    for name in ("Nicholas Sturgeon", "Joe Orona"):
+        item = note_bonus_evidence[name][0]
+        print(f"NOTE BONUS {name} {item['amount']:.2f} {item['date']} {item['note']}")
     for p in people:
-        if p["raw"] != "0:00" or p["wages"] or p["reimb"] or p["bonus"]:
+        if p["raw"] != "0:00" or p["wages"] or p["reimb"] or p["bonus"] or p.get("note_bonus"):
             wd = "—" if p["wd"] is None else f"{p['wd']:5.1f}"
             gc = "—" if p["gc"] is None else f"{p['gc']:5.1f}"
             g26 = "—" if p["gc26"] is None else f"{p['gc26']:5.1f}"
             bonus_s = "—" if p["bonus"] is None else f"{p['bonus']:.2f}"
+            note_s = "—" if p["note_bonus"] is None else f"{p['note_bonus']:.2f}"
             print(
                 f"{p['name']:24} raw {p['raw']:>7} WD {wd} GC {gc} 26 {g26} "
                 f"wages {p['wages']} reimb {p['reimb']:.2f} bonus {bonus_s} "
-                f"ass {p['assurity']:.2f} net {p['net']}"
+                f"note {note_s} ass {p['assurity']:.2f} net {p['net']}"
             )
     for t in trips:
         print("TRIP", t["name"], t["date"], t["miles"], t["amount"], t["evidence"][:80])
@@ -671,12 +776,23 @@ def main():
                 "fuel",
                 "reimbursements",
                 "thanksgiving_bonus",
+                "note_bonus",
                 "assurity",
                 "net_payable",
                 "notes",
             ]
         )
         for p in people:
+            evidence = p.get("note_bonus_evidence") or []
+            summary_notes = p["note"]
+            if evidence:
+                item = evidence[0]
+                extra = (
+                    f"Note bonus {p['note_bonus']:.2f} is included in the net as its own line. "
+                    "Separate from the Thanksgiving bonus. "
+                    f"{item['date']} {item['in']}–{item['out']}. {item['note']}"
+                )
+                summary_notes = f"{summary_notes} {extra}".strip() if summary_notes else extra
             w.writerow(
                 [
                     "summary",
@@ -698,9 +814,10 @@ def main():
                     f"{p['fuel']:.2f}",
                     f"{p['reimb']:.2f}",
                     "" if p["bonus"] is None else f"{p['bonus']:.2f}",
+                    "" if p["note_bonus"] is None else f"{p['note_bonus']:.2f}",
                     f"{p['assurity']:.2f}",
                     "" if p["net"] is None else f"{p['net']:.2f}",
-                    p["note"],
+                    summary_notes,
                 ]
             )
         for p in people:
@@ -717,6 +834,7 @@ def main():
                         punch["job"],
                         punch["bucket"],
                         "yes" if punch["gc26"] else "",
+                        "",
                         "",
                         "",
                         "",
@@ -747,6 +865,7 @@ def main():
             f"<td class='num'>{money(p['wages'])}</td>"
             f"<td class='num'>{money(p['reimb'])}</td>"
             f"<td class='num'>{money(p['bonus'])}</td>"
+            f"<td class='num'>{money(p['note_bonus'])}</td>"
             f"<td class='num'>{money(p['assurity'])}</td>"
             f"<td class='num'>{money(p['net'])}</td>"
             "</tr>"
@@ -776,6 +895,18 @@ def main():
         bits = []
         if p["note"]:
             bits.append(f"<p>{e(p['note'])}</p>")
+        if p.get("note_bonus_evidence"):
+            items = "".join(
+                "<li>"
+                f"<b>{e(item['date'])}</b> {e(item['in'])}–{e(item['out'])}. {e(item['note'])}"
+                "</li>"
+                for item in p["note_bonus_evidence"]
+            )
+            bits.append(
+                f"<p><b>Note bonus {money(p['note_bonus'])}.</b> "
+                "Included in the net as its own line. Separate from the Thanksgiving bonus.</p>"
+                f"<ul>{items}</ul>"
+            )
         if p["trips"]:
             items = "".join(
                 f"<li>{e(t['date'])}: {t['miles'] if t['miles'] is not None else '—'} mi, {money(t['amount'])}. {e(t['evidence'])}</li>"
@@ -785,6 +916,8 @@ def main():
         if p["fuel"]:
             bits.append(f"<p>Fuel stipend {money(p['fuel'])}.</p>")
         bits.append(f"<p>Thanksgiving bonus {money(p['bonus'])}.</p>")
+        if not p.get("note_bonus_evidence"):
+            bits.append(f"<p>Note bonus {money(p['note_bonus'])}.</p>")
         # Timesheet shape: one row per job, day columns are the raw hours on the timesheet.
         # Notes from the job-detail punches sit under that row.
         order = []
@@ -842,6 +975,7 @@ def main():
                     f"WD {p['wd']:.1f} · GC {p['gc']:.1f} · 26-GC {p['gc26']:.1f} · "
                     f"rate {money(p['rate']) if p['rate'] is not None else '—'} · wages {money(p['wages'])} · "
                     f"reimbursements {money(p['reimb'])} · Thanksgiving bonus {money(p['bonus'])} · "
+                    f"Note bonus {money(p['note_bonus'])} · "
                     f"Assurity {money(p['assurity'])} · net {money(p['net'])}"
                 )
             )
@@ -899,22 +1033,23 @@ ul {{ margin: 4px 0 8px 18px; }}
 <div class="banner">TEST ONLY · DO NOT MERGE · DO NOT DEPLOY · This week is not on the live site.</div>
 <h1>Noble Field Ledger — test review, 11/16/2026 through 11/22/2026</h1>
 <p>ClockShark job-detail report and timesheet, both run 11/23/2026 at 8:43–8:48 AM Arizona time. Noble General Contracting (GC) and Noble Windows &amp; Doors (WD). Not a payment.</p>
-<p>Each contractor section is the timesheet: job, then the hours for 11/16 through 11/22. Under each job are the notes from the job-detail punches that make those hours. Day columns stay in hours and minutes, the same way the timesheet prints them. Pay uses each punch’s own tenth, then adds those tenths. Every contractor’s raw week total matches the timesheet. Breaks are already out of the ClockShark total. 26-GC sits inside GC. Net payable = ClockShark wages + reimbursements + Thanksgiving bonus + additional lines − Assurity. No income tax. ClockShark wages stay the timesheet wages. The two additional lines are not in that wages total. They are added into net payable.</p>
+<p>Each contractor section is the timesheet: job, then the hours for 11/16 through 11/22. Under each job are the notes from the job-detail punches that make those hours. Day columns stay in hours and minutes, the same way the timesheet prints them. Pay uses each punch’s own tenth, then adds those tenths. Every contractor’s raw week total matches the timesheet. Breaks are already out of the ClockShark total. 26-GC sits inside GC. Net payable = ClockShark wages + reimbursements + Thanksgiving bonus + note bonus + additional lines − Assurity. No income tax. ClockShark wages stay the timesheet wages. The note bonus and the two additional lines are not in that wages total. They are added into net payable.</p>
 <p>Thanksgiving bonus is {money(THANKSGIVING_BONUS)} for each contractor on this week except George Piekarski and Nicholas Sommer. It is not wages and not a reimbursement. Exceptional Cleaning Services/Paulina Moya and Angel Soto - Helper Esias do not receive it.</p>
-<p>Additional lines, each on its own row after Angel Soto Moya, bucket additional, not WD and not GC. Exceptional Cleaning Services/Paulina Moya: raw 4:34 converted to 4.5 at $35.00 = {money(extras[0]['wages'])}. Angel Soto - Helper Esias: 20.7 hours, already converted, at $15.00 = {money(extras[1]['wages'])}. No Assurity, no fuel, no mileage, and no Thanksgiving bonus. Neither amount is in Angel Soto Moya’s hours, wages, or net.</p>
-<p><b>Wages {money(sum_wages)}. Reimbursements {money(sum_reimb)}. Thanksgiving bonus {money(sum_bonus)}. Additional lines {money(sum_additional)}. Assurity {money(sum_assur)}. Net payable {money(sum_net)}.</b> Net payable = {money(sum_wages)} + {money(sum_reimb)} + {money(sum_bonus)} + {money(extras[0]['wages'])} + {money(extras[1]['wages'])} − {money(sum_assur)} = {money(sum_net)}.</p>
+<p>Note bonus is the amount a contractor wrote on a punch, paid as its own line. It is not the Thanksgiving bonus and it is not wages. Nicholas Sturgeon {money(note_bonus_amounts['Nicholas Sturgeon'])} from his {e(note_bonus_evidence['Nicholas Sturgeon'][0]['date'])} note. Joe Orona {money(note_bonus_amounts['Joe Orona'])} from his {e(note_bonus_evidence['Joe Orona'][0]['date'])} note. Every other calculated contractor is $0.00. George Piekarski, Nicholas Sommer, Exceptional Cleaning Services/Paulina Moya, and Angel Soto - Helper Esias do not receive a note bonus.</p>
+<p>Additional lines, each on its own row after Angel Soto Moya, bucket additional, not WD and not GC. Exceptional Cleaning Services/Paulina Moya: raw 4:34 converted to 4.5 at $35.00 = {money(extras[0]['wages'])}. Angel Soto - Helper Esias: 20.7 hours, already converted, at $15.00 = {money(extras[1]['wages'])}. No Assurity, no fuel, no mileage, no Thanksgiving bonus, and no note bonus. Neither amount is in Angel Soto Moya’s hours, wages, or net.</p>
+<p><b>Wages {money(sum_wages)}. Reimbursements {money(sum_reimb)}. Thanksgiving bonus {money(sum_bonus)}. Note bonus {money(sum_note)}. Additional lines {money(sum_additional)}. Assurity {money(sum_assur)}. Net payable {money(sum_net)}.</b> Net payable = {money(sum_wages)} + {money(sum_reimb)} + {money(sum_bonus)} + {money(sum_note)} + {money(extras[0]['wages'])} + {money(extras[1]['wages'])} − {money(sum_assur)} = {money(sum_net)}.</p>
 <table>
-<thead><tr><th>Contractor</th><th>Raw</th><th>WD</th><th>GC</th><th>26-GC</th><th>Rate</th><th>Wages</th><th>Reimbursements</th><th>Thanksgiving bonus</th><th>Assurity</th><th>Net payable</th></tr></thead>
+<thead><tr><th>Contractor</th><th>Raw</th><th>WD</th><th>GC</th><th>26-GC</th><th>Rate</th><th>Wages</th><th>Reimbursements</th><th>Thanksgiving bonus</th><th>Note bonus</th><th>Assurity</th><th>Net payable</th></tr></thead>
 <tbody>
 {''.join(rows)}
-<tr class="total"><td>Week total</td><td></td><td></td><td></td><td></td><td></td><td class="num">{money(sum_wages)}</td><td class="num">{money(sum_reimb)}</td><td class="num">{money(sum_bonus)}</td><td class="num">{money(sum_assur)}</td><td class="num">{money(sum_net)}</td></tr>
+<tr class="total"><td>Week total</td><td></td><td></td><td></td><td></td><td></td><td class="num">{money(sum_wages)}</td><td class="num">{money(sum_reimb)}</td><td class="num">{money(sum_bonus)}</td><td class="num">{money(sum_note)}</td><td class="num">{money(sum_assur)}</td><td class="num">{money(sum_net)}</td></tr>
 </tbody></table>
 <h2>Read these before the detail</h2>
 <ul>
 <li>George Piekarski and Nicholas Sommer are not calculated. George’s 73:45 stays on his timesheet with the job-detail notes, including the 20:12 punch, the 0:23 punch, the 23:00 punch, and the 11:27 overnight punch. Nicholas Sommer has no punches.</li>
 <li>A customer price in a note ($85 an hour, a $275 trip) is not a pay rate.</li>
 <li>Brecken Bogle’s 3:54 on Tony Arnold is left out of pay. He wrote that the homeowner paid cash.</li>
-<li>Notes that ask for a bonus are not in the net: Nicholas Sturgeon $150, Joe Orona $100. Those notes are separate from the Thanksgiving bonus. Angel Soto Moya’s 11/19/2026 note on the 4:34 cleaning punch says Paulina $35hr. That pay is the additional line for Exceptional Cleaning Services/Paulina Moya, raw 4:34 converted to 4.5 at $35.00, $157.50. Angel Soto - Helper Esias is 20.7 hours at $15.00, $310.50. Both are separate lines and are not in Angel’s net.</li>
+<li>Notes that ask for a bonus are included as their own lines, separate from the Thanksgiving bonus: Nicholas Sturgeon {money(note_bonus_amounts['Nicholas Sturgeon'])}, Joe Orona {money(note_bonus_amounts['Joe Orona'])}. Those amounts are in each contractor’s net. Angel Soto Moya’s 11/19/2026 note on the 4:34 cleaning punch says Paulina $35hr. That pay is the additional line for Exceptional Cleaning Services/Paulina Moya, raw 4:34 converted to 4.5 at $35.00, $157.50. Angel Soto - Helper Esias is 20.7 hours at $15.00, $310.50. Both are separate lines and are not in Angel’s net.</li>
 <li>26-WS on Andrew Kelley is WD. It is an active Windows &amp; Doors project. Shaw Butte is WD.</li>
 <li>Eric Havins is all WD, including Noble Office. Noble W&amp;D shop time is WD. 26-KB (Mark Kampf) stays GC.</li>
 <li>Christian Ellis Blank has no punches. The standing rule is still flat 40 GC hours, $1,750.00. Matthew Laush is on the timesheet at 0:00.</li>
