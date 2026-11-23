@@ -481,6 +481,102 @@ def rollup(punches, trips):
     return people
 
 
+def additional_pay(punches):
+    """Two lines Kelly added for this week. Not ClockShark wages.
+
+    Paulina uses the 4:34 span on Angel Soto Moya's 11/19/2026 note, converted
+    once with the per-punch tenths rule. Esias uses 20.7 hours already
+    converted. Neither amount is added to Angel's hours or net.
+    """
+    paulina = None
+    esias_units = 0
+    for punch in punches:
+        if punch["name"] != "Angel Soto Moya" or punch["exclude"]:
+            continue
+        if re.search(r"paulina", punch["note"], re.I) and punch["raw"] == "4:34":
+            if paulina is not None:
+                raise SystemExit("More than one Paulina 4:34 punch")
+            paulina = punch
+        if re.search(r"esias", punch["note"], re.I):
+            esias_units += punch["units"]
+    if paulina is None:
+        raise SystemExit("Paulina 4:34 note was not found")
+    hours = hm(paulina["minutes"]) / 10
+    if hours != 4.5:
+        raise SystemExit(f"4:34 converted to {hours}, expected 4.5")
+    if esias_units != 207:
+        raise SystemExit(f"Esias same-time tenths are {esias_units / 10}, expected 20.7")
+    paulina_wages = q2(Decimal("4.5") * Decimal("35"))
+    esias_wages = q2(Decimal("20.7") * Decimal("15"))
+    if paulina_wages != 157.5 or esias_wages != 310.5:
+        raise SystemExit(f"additional wages {paulina_wages} {esias_wages}")
+
+    def line(name, raw, raw_display, line_hours, rate, wages, note):
+        return {
+            "name": name,
+            "punches": [],
+            "wd": None,
+            "gc": None,
+            "gc26": None,
+            "hours": line_hours,
+            "raw": raw,
+            "raw_display": raw_display,
+            "rate": rate,
+            "wages": wages,
+            "fuel": 0.0,
+            "mileage": 0.0,
+            "miles": 0.0,
+            "reimb": 0.0,
+            "bonus": None,
+            "assurity": 0.0,
+            "net": wages,
+            "trips": [],
+            "missing_rate": False,
+            "additional": True,
+            "bucket": "additional",
+            "note": note,
+        }
+
+    paulina_note = (
+        "Additional line. Not ClockShark wages and not in Angel Soto Moya’s net. "
+        f"Angel’s {paulina['date']} punch, {paulina['in']}–{paulina['out']}, is raw 4:34. "
+        "The per-punch tenths rule converts 4:34 to 4.5. "
+        f"The note says: {paulina['note']}. "
+        "Rate $35.00. Wages $157.50. Net $157.50. "
+        "Bucket additional, not WD and not GC. "
+        "No Assurity, no fuel, no mileage, and no Thanksgiving bonus."
+    )
+    esias_note = (
+        "Additional line. Not ClockShark wages and not in Angel Soto Moya’s net. "
+        "Hours are 20.7, already converted, and are not converted again. "
+        "Rate $15.00. Wages $310.50. Net $310.50. "
+        "Bucket additional, not WD and not GC. "
+        "No Assurity, no fuel, no mileage, and no Thanksgiving bonus. "
+        "Angel Soto Moya’s punches that say Esias was there the same time stay on his timesheet. "
+        "These hours are not added to his WD, GC, wages, or net."
+    )
+    return [
+        line(
+            "Exceptional Cleaning Services/Paulina Moya",
+            "4:34",
+            "4:34 → 4.5",
+            4.5,
+            35.0,
+            paulina_wages,
+            paulina_note,
+        ),
+        line(
+            "Angel Soto - Helper Esias",
+            "20.7",
+            "20.7",
+            20.7,
+            15.0,
+            esias_wages,
+            esias_note,
+        ),
+    ]
+
+
 def main():
     punches = load_punches()
     # Every named punch must reconcile to the timesheet minute total.
@@ -494,16 +590,45 @@ def main():
             raise SystemExit(f"{name} {tot[name]} != sheet {sm}")
     trips = mileage(punches)
     people = rollup(punches, trips)
-    paid = [p for p in people if p["wages"] is not None]
-    sum_wages = q2(sum(p["wages"] for p in paid))
-    sum_reimb = q2(sum(p["reimb"] for p in paid))
-    sum_bonus = q2(sum(p["bonus"] for p in paid))
-    sum_assur = q2(sum(p["assurity"] for p in paid))
-    sum_net = q2(sum(p["net"] for p in paid))
-    recipients = [p["name"] for p in paid if p["bonus"]]
+    extras = additional_pay(punches)
+    merged = []
+    found_angel = False
+    for person in people:
+        merged.append(person)
+        if person["name"] == "Angel Soto Moya":
+            found_angel = True
+            pointer = (
+                "Exceptional Cleaning Services/Paulina Moya "
+                f"({money(extras[0]['wages'])}) and Angel Soto - Helper Esias "
+                f"({money(extras[1]['wages'])}) are separate lines immediately below. "
+                "Those amounts are not in this net, so they are not paid twice."
+            )
+            person["note"] = f"{person['note']} {pointer}".strip() if person["note"] else pointer
+            merged.extend(extras)
+    if not found_angel:
+        raise SystemExit("Angel Soto Moya is not on the summary")
+    people = merged
+    clock = [p for p in people if p["wages"] is not None and not p.get("additional")]
+    additional = [p for p in people if p.get("additional")]
+    sum_wages = q2(sum(p["wages"] for p in clock))
+    sum_reimb = q2(sum(p["reimb"] for p in clock))
+    sum_bonus = q2(sum(p["bonus"] or 0 for p in clock))
+    sum_assur = q2(sum(p["assurity"] for p in clock))
+    sum_additional = q2(sum(p["net"] for p in additional))
+    sum_clock_net = q2(sum(p["net"] for p in clock))
+    sum_net = q2(sum_clock_net + sum_additional)
+    recipients = [p["name"] for p in clock if p["bonus"]]
+    if len(recipients) != 19 or any(p["bonus"] for p in additional):
+        raise SystemExit(f"Thanksgiving bonus recipients changed: {recipients}")
+    angel = next(p for p in people if p["name"] == "Angel Soto Moya")
+    if angel["wages"] != 2037.0 or angel["hours"] != 48.5 or abs(angel["net"] - 2030.61) > 0.001:
+        raise SystemExit(f"Angel’s own pay changed: {angel['hours']} {angel['wages']} {angel['net']}")
+    if abs(sum_wages - 24300.30) > 0.001 or abs(sum_additional - 468.00) > 0.001 or abs(sum_net - 26905.74) > 0.001:
+        raise SystemExit(f"totals wages {sum_wages} additional {sum_additional} net {sum_net}")
     print(
         f"punches {len(punches)} wages {sum_wages:.2f} reimb {sum_reimb:.2f} "
-        f"bonus {sum_bonus:.2f} ({len(recipients)}) assurity {sum_assur:.2f} net {sum_net:.2f}"
+        f"bonus {sum_bonus:.2f} ({len(recipients)}) additional {sum_additional:.2f} "
+        f"assurity {sum_assur:.2f} clock net {sum_clock_net:.2f} net {sum_net:.2f}"
     )
     print("bonus recipients:", ", ".join(recipients))
     for p in people:
@@ -562,7 +687,7 @@ def main():
                     p["raw"],
                     "" if p["hours"] is None else f"{p['hours']:.1f}",
                     "",
-                    "",
+                    p.get("bucket", ""),
                     "",
                     "" if p["wd"] is None else f"{p['wd']:.1f}",
                     "" if p["gc"] is None else f"{p['gc']:.1f}",
@@ -609,10 +734,12 @@ def main():
 
     rows = []
     for p in people:
+        tag = " <span class='tag'>Additional line</span>" if p.get("additional") else ""
+        row_class = " class='additional'" if p.get("additional") else ""
         rows.append(
-            "<tr>"
-            f"<td>{e(p['name'])}</td>"
-            f"<td class='num'>{p['raw']}</td>"
+            f"<tr{row_class}>"
+            f"<td>{e(p['name'])}{tag}</td>"
+            f"<td class='num'>{e(p.get('raw_display') or p['raw'])}</td>"
             f"<td class='num'>{'—' if p['wd'] is None else format(p['wd'], '.1f')}</td>"
             f"<td class='num'>{'—' if p['gc'] is None else format(p['gc'], '.1f')}</td>"
             f"<td class='num'>{'—' if p['gc26'] is None else format(p['gc26'], '.1f')}</td>"
@@ -634,6 +761,16 @@ def main():
 
     details = []
     for p in people:
+        if p.get("additional"):
+            details.append(
+                f"<section class='person'><h2>{e(p['name'])}</h2>"
+                f"<p>{e(p['note'])}</p>"
+                f"<p>Shown on the pay summary as its own row. "
+                f"Raw {e(p.get('raw_display') or p['raw'])} · rate {money(p['rate'])} · "
+                f"wages {money(p['wages'])} · net {money(p['net'])}.</p>"
+                "</section>"
+            )
+            continue
         if not p["punches"] and not p["note"]:
             continue
         bits = []
@@ -752,6 +889,7 @@ th, td {{ border: 1px solid #d6d3d1; padding: 3px 5px; vertical-align: top; }}
 th {{ background: #1f4e79; color: #fff; text-align: left; }}
 .num {{ text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }}
 tr.total td {{ background: #f5f5f4; font-weight: 700; }}
+tr.additional td {{ background: #f8fafc; }}
 tr.punch-note td {{ background: #fafaf9; color: #444; }}
 .tag {{ color: #1f4e79; font-size: 10px; }}
 .note {{ color: #444; }}
@@ -761,21 +899,22 @@ ul {{ margin: 4px 0 8px 18px; }}
 <div class="banner">TEST ONLY · DO NOT MERGE · DO NOT DEPLOY · This week is not on the live site.</div>
 <h1>Noble Field Ledger — test review, 11/16/2026 through 11/22/2026</h1>
 <p>ClockShark job-detail report and timesheet, both run 11/23/2026 at 8:43–8:48 AM Arizona time. Noble General Contracting (GC) and Noble Windows &amp; Doors (WD). Not a payment.</p>
-<p>Each contractor section is the timesheet: job, then the hours for 11/16 through 11/22. Under each job are the notes from the job-detail punches that make those hours. Day columns stay in hours and minutes, the same way the timesheet prints them. Pay uses each punch’s own tenth, then adds those tenths. Every contractor’s raw week total matches the timesheet. Breaks are already out of the ClockShark total. 26-GC sits inside GC. Net payable = wages + reimbursements + Thanksgiving bonus − Assurity. No income tax.</p>
-<p>Thanksgiving bonus is {money(THANKSGIVING_BONUS)} for each contractor on this week except George Piekarski and Nicholas Sommer. It is not wages and not a reimbursement.</p>
-<p><b>Wages {money(sum_wages)}. Reimbursements {money(sum_reimb)}. Thanksgiving bonus {money(sum_bonus)}. Assurity {money(sum_assur)}. Net payable {money(sum_net)}.</b></p>
+<p>Each contractor section is the timesheet: job, then the hours for 11/16 through 11/22. Under each job are the notes from the job-detail punches that make those hours. Day columns stay in hours and minutes, the same way the timesheet prints them. Pay uses each punch’s own tenth, then adds those tenths. Every contractor’s raw week total matches the timesheet. Breaks are already out of the ClockShark total. 26-GC sits inside GC. Net payable = ClockShark wages + reimbursements + Thanksgiving bonus + additional lines − Assurity. No income tax. ClockShark wages stay the timesheet wages. The two additional lines are not in that wages total. They are added into net payable.</p>
+<p>Thanksgiving bonus is {money(THANKSGIVING_BONUS)} for each contractor on this week except George Piekarski and Nicholas Sommer. It is not wages and not a reimbursement. Exceptional Cleaning Services/Paulina Moya and Angel Soto - Helper Esias do not receive it.</p>
+<p>Additional lines, each on its own row after Angel Soto Moya, bucket additional, not WD and not GC. Exceptional Cleaning Services/Paulina Moya: raw 4:34 converted to 4.5 at $35.00 = {money(extras[0]['wages'])}. Angel Soto - Helper Esias: 20.7 hours, already converted, at $15.00 = {money(extras[1]['wages'])}. No Assurity, no fuel, no mileage, and no Thanksgiving bonus. Neither amount is in Angel Soto Moya’s hours, wages, or net.</p>
+<p><b>Wages {money(sum_wages)}. Reimbursements {money(sum_reimb)}. Thanksgiving bonus {money(sum_bonus)}. Additional lines {money(sum_additional)}. Assurity {money(sum_assur)}. Net payable {money(sum_net)}.</b> Net payable = {money(sum_wages)} + {money(sum_reimb)} + {money(sum_bonus)} + {money(extras[0]['wages'])} + {money(extras[1]['wages'])} − {money(sum_assur)} = {money(sum_net)}.</p>
 <table>
 <thead><tr><th>Contractor</th><th>Raw</th><th>WD</th><th>GC</th><th>26-GC</th><th>Rate</th><th>Wages</th><th>Reimbursements</th><th>Thanksgiving bonus</th><th>Assurity</th><th>Net payable</th></tr></thead>
 <tbody>
 {''.join(rows)}
-<tr class="total"><td>Paid total</td><td></td><td></td><td></td><td></td><td></td><td class="num">{money(sum_wages)}</td><td class="num">{money(sum_reimb)}</td><td class="num">{money(sum_bonus)}</td><td class="num">{money(sum_assur)}</td><td class="num">{money(sum_net)}</td></tr>
+<tr class="total"><td>Week total</td><td></td><td></td><td></td><td></td><td></td><td class="num">{money(sum_wages)}</td><td class="num">{money(sum_reimb)}</td><td class="num">{money(sum_bonus)}</td><td class="num">{money(sum_assur)}</td><td class="num">{money(sum_net)}</td></tr>
 </tbody></table>
 <h2>Read these before the detail</h2>
 <ul>
 <li>George Piekarski and Nicholas Sommer are not calculated. George’s 73:45 stays on his timesheet with the job-detail notes, including the 20:12 punch, the 0:23 punch, the 23:00 punch, and the 11:27 overnight punch. Nicholas Sommer has no punches.</li>
 <li>A customer price in a note ($85 an hour, a $275 trip) is not a pay rate.</li>
 <li>Brecken Bogle’s 3:54 on Tony Arnold is left out of pay. He wrote that the homeowner paid cash.</li>
-<li>Notes that ask for a bonus are not in the net: Nicholas Sturgeon $150, Joe Orona $100. Those notes are separate from the Thanksgiving bonus. Angel Soto Moya’s note says “Paulina $35hr” on a 4:34 cleaning punch and does not give hours. Nothing was added for that.</li>
+<li>Notes that ask for a bonus are not in the net: Nicholas Sturgeon $150, Joe Orona $100. Those notes are separate from the Thanksgiving bonus. Angel Soto Moya’s 11/19/2026 note on the 4:34 cleaning punch says Paulina $35hr. That pay is the additional line for Exceptional Cleaning Services/Paulina Moya, raw 4:34 converted to 4.5 at $35.00, $157.50. Angel Soto - Helper Esias is 20.7 hours at $15.00, $310.50. Both are separate lines and are not in Angel’s net.</li>
 <li>26-WS on Andrew Kelley is WD. It is an active Windows &amp; Doors project. Shaw Butte is WD.</li>
 <li>Eric Havins is all WD, including Noble Office. Noble W&amp;D shop time is WD. 26-KB (Mark Kampf) stays GC.</li>
 <li>Christian Ellis Blank has no punches. The standing rule is still flat 40 GC hours, $1,750.00. Matthew Laush is on the timesheet at 0:00.</li>
