@@ -265,7 +265,11 @@ def load_punches():
                 flags.append("Long punch. Clock time is counted. See the note.")
             if re.search(r"billable|bill one hour|bonus|\$35", note_s, re.I):
                 flags.append("Note mentions pay or a customer price. Not added to the net.")
-            wd = who in ALWAYS_WD or bool(WD_RE.search(job_name))
+            wd = (
+                who in ALWAYS_WD
+                or bool(WD_RE.search(job_name))
+                or bool(re.search(r"Shaw\s+Butte", job_name, re.I))
+            )
             punches.append(
                 {
                     "name": who,
@@ -748,8 +752,8 @@ ul {{ margin: 4px 0 8px 18px; }}
 <li>A customer price in a note ($85 an hour, a $275 trip) is not a pay rate.</li>
 <li>Brecken Bogle’s 3:54 on Tony Arnold is left out of pay. He wrote that the homeowner paid cash.</li>
 <li>Notes that ask for a bonus are not in the net: Nicholas Sturgeon $150, Joe Orona $100. Angel Soto Moya’s note says “Paulina $35hr” on a 4:34 cleaning punch and does not give hours. Nothing was added for that.</li>
-<li>26-WS on Andrew Kelley is WD. It is an active Windows &amp; Doors project. Shaw Butte says “W&amp;D” and does not carry a 26-WD, 26-WS, or W/D tag, so it stays GC.</li>
-<li>Eric Havins is all WD, including Noble Office. Noble W&amp;D shop time is WD. 26-KB (Mark Kampf) is GC.</li>
+<li>26-WS on Andrew Kelley is WD. It is an active Windows &amp; Doors project. Shaw Butte is WD.</li>
+<li>Eric Havins is all WD, including Noble Office. Noble W&amp;D shop time is WD. 26-KB (Mark Kampf) stays GC.</li>
 <li>Christian Ellis Blank has no punches. The standing rule is still flat 40 GC hours, $1,750.00. Matthew Laush is on the timesheet at 0:00.</li>
 <li>Tony Madalena ($36) and George Rosario ($35) have rates on file. No Assurity premium for them appears on the 11/2 week record, so nothing is withheld. Kelly can confirm.</li>
 <li>Weeks 11/2/2026–11/8/2026 and 11/9/2026–11/15/2026 were not changed. This week is not written into the live ledger.</li>
