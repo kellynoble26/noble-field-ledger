@@ -1,7 +1,7 @@
 section,contractor,day,in,out,raw,tenth,job,bucket,is_26gc,wd,gc,gc26,rate,wages,mileage,fuel,reimbursements,assurity,net_payable,notes
-summary,Andy Gomez,,,,36:14,36.0,,,,2.0,34.0,0.0,28.00,1008.00,0.00,50.00,50.00,60.49,997.51,
+summary,Andy Gomez,,,,36:14,36.0,,,,36.0,0.0,0.0,28.00,1008.00,0.00,50.00,50.00,60.49,997.51,
 summary,Angel Soto Moya,,,,48:49,48.5,,,,0.0,48.5,48.5,42.00,2037.00,0.00,0.00,0.00,106.39,1930.61,
-summary,Brandon Hermaszewski,,,,38:57,38.8,,,,0.0,38.8,0.0,35.00,1358.00,0.00,0.00,0.00,0.00,1358.00,
+summary,Brandon Hermaszewski,,,,38:57,38.8,,,,38.8,0.0,0.0,35.00,1358.00,0.00,0.00,0.00,0.00,1358.00,
 summary,Brecken Bogle,,,,25:48,21.7,,,,0.0,21.7,9.7,18.00,390.60,0.00,0.00,0.00,0.00,390.60,
 summary,Christian Ellis Blank,,,,flat 40:00,40.0,,,,0.0,40.0,0.0,43.75,1750.00,0.00,0.00,0.00,0.00,1750.00,"Flat 40 hours, all GC. No punches on this timesheet. Standing salary rule."
 summary,Daniel Smalley,,,,47:00,46.5,,,,46.0,0.5,0.0,45.00,2092.50,0.00,0.00,0.00,60.39,2032.11,
@@ -19,11 +19,11 @@ summary,Matthew Laush,,,,0:00,0.0,,,,0.0,0.0,0.0,50.00,0.00,0.00,0.00,0.00,0.00,
 summary,Nicholas Sturgeon,,,,55:27,54.8,,,,0.0,54.8,36.0,34.00,1863.20,354.16,0.00,354.16,0.00,2217.36,
 summary,Rex Butterfield,,,,39:52,39.7,,,,0.0,39.7,32.5,30.00,1191.00,0.00,0.00,0.00,0.00,1191.00,
 summary,Tony Madalena,,,,38:06,37.8,,,,0.0,37.8,35.5,36.00,1360.80,0.00,0.00,0.00,0.00,1360.80,
-punch,Andy Gomez,11/16/2026,8:20 AM,3:14 PM,6:54,6.9,Andrew Kelley:26-WS-KELLEY-9829 E ONZA DR-DOOR MOD-333-26-WS- KELLEY-9829 E ONZA DR-DOOR MOD-333,GC,,,,,,,,,,,,
-punch,Andy Gomez,11/17/2026,7:55 AM,4:19 PM,8:25,8.4,Andrew Kelley:26-WS-KELLEY-9829 E ONZA DR-DOOR MOD-333-26-WS- KELLEY-9829 E ONZA DR-DOOR MOD-333,GC,,,,,,,,,,,,Homedepot run
-punch,Andy Gomez,11/18/2026,7:50 AM,2:30 PM,6:22,6.3,Andrew Kelley:26-WS-KELLEY-9829 E ONZA DR-DOOR MOD-333-26-WS- KELLEY-9829 E ONZA DR-DOOR MOD-333,GC,,,,,,,,,,,,
-punch,Andy Gomez,11/19/2026,7:14 AM,3:57 PM,8:27,8.4,Andrew Kelley:26-WS-KELLEY-9829 E ONZA DR-DOOR MOD-333-26-WS- KELLEY-9829 E ONZA DR-DOOR MOD-333,GC,,,,,,,,,,,,Sherwin Williams run 2nd Sherwin Williams run for paint matching
-punch,Andy Gomez,11/20/2026,8:08 AM,12:10 PM,4:03,4.0,Andrew Kelley:26-WS-KELLEY-9829 E ONZA DR-DOOR MOD-333-26-WS- KELLEY-9829 E ONZA DR-DOOR MOD-333,GC,,,,,,,,,,,,
+punch,Andy Gomez,11/16/2026,8:20 AM,3:14 PM,6:54,6.9,Andrew Kelley:26-WS-KELLEY-9829 E ONZA DR-DOOR MOD-333-26-WS- KELLEY-9829 E ONZA DR-DOOR MOD-333,WD,,,,,,,,,,,,
+punch,Andy Gomez,11/17/2026,7:55 AM,4:19 PM,8:25,8.4,Andrew Kelley:26-WS-KELLEY-9829 E ONZA DR-DOOR MOD-333-26-WS- KELLEY-9829 E ONZA DR-DOOR MOD-333,WD,,,,,,,,,,,,Homedepot run
+punch,Andy Gomez,11/18/2026,7:50 AM,2:30 PM,6:22,6.3,Andrew Kelley:26-WS-KELLEY-9829 E ONZA DR-DOOR MOD-333-26-WS- KELLEY-9829 E ONZA DR-DOOR MOD-333,WD,,,,,,,,,,,,
+punch,Andy Gomez,11/19/2026,7:14 AM,3:57 PM,8:27,8.4,Andrew Kelley:26-WS-KELLEY-9829 E ONZA DR-DOOR MOD-333-26-WS- KELLEY-9829 E ONZA DR-DOOR MOD-333,WD,,,,,,,,,,,,Sherwin Williams run 2nd Sherwin Williams run for paint matching
+punch,Andy Gomez,11/20/2026,8:08 AM,12:10 PM,4:03,4.0,Andrew Kelley:26-WS-KELLEY-9829 E ONZA DR-DOOR MOD-333-26-WS- KELLEY-9829 E ONZA DR-DOOR MOD-333,WD,,,,,,,,,,,,
 punch,Andy Gomez,11/16/2026,7:13 AM,8:20 AM,1:07,1.1,Noble Windows & Doors LLC:Noble W&D,WD,,,,,,,,,,,,
 punch,Andy Gomez,11/16/2026,3:14 PM,4:10 PM,0:56,0.9,Noble Windows & Doors LLC:Noble W&D,WD,,,,,,,,,,,,
 punch,Angel Soto Moya,11/16/2026,8:38 AM,7:51 PM,11:13,11.2,Jesse Keenan:26-GC-Jesse Keenan-Residence-22929 E Munoz CT-007-22929 E Munoz ST,GC,yes,,,,,,,,,,,First 5 hours move outside furniture to pressure wash trash out all debreee scrubb and clean all furniture and walls pressure washed spotless hang shelves 2 hour build counter top for Jackie downstairs 2 hours go thru man hours with George 1.5 hours pick up materials and load up rest of time
@@ -34,11 +34,11 @@ punch,Angel Soto Moya,11/19/2026,8:58 AM,4:04 PM,7:06,7.1,Mosher Residence Alici
 punch,Angel Soto Moya,11/18/2026,7:11 AM,12:15 PM,5:04,5.0,"Joseph Murphy:Joseph Murphy:26-GC-MURPHY, J-28745 N 105th Way, Scottsdale-Repair - Water Damage-007",GC,yes,,,,,,,,,,,
 punch,Angel Soto Moya,11/18/2026,12:15 PM,7:46 PM,7:06,7.1,"Neutra Design Studio, Daniella Danyals, Designer:Neutra Design Studio:26- GC-ADAM ESTOCLAT-HRLY-007-4601 E Cholla St., PHX 85028",GC,yes,,,,,,,,,,,Scrape sand hot muds 1 coat float ap 2 coats removed prepped areas around cabinets remove cabinet doors muds corner bead headers fix 2 outlet cover plates Esias same time
 punch,Angel Soto Moya,11/19/2026,4:59 PM,9:33 PM,4:34,4.5,"Neutra Design Studio, Daniella Danyals, Designer:Neutra Design Studio:26- GC-ADAM ESTOCLAT-HRLY-007-4601 E Cholla St., PHX 85028",GC,yes,,,,,,,,,,,"Note mentions pay or a customer price. Not added to the net. Post construction clean living room, kitchen and dining areas, cabinets, vacuum, mop and scrub paint off floor, clean pendants Paulina $35hr"
-punch,Brandon Hermaszewski,11/16/2026,7:19 AM,4:07 PM,8:48,8.8,Andrew Kelley:26-WS-KELLEY-9829 E ONZA DR-DOOR MOD-333-26-WS- KELLEY-9829 E ONZA DR-DOOR MOD-333,GC,,,,,,,,,,,,
-punch,Brandon Hermaszewski,11/17/2026,6:54 AM,4:23 PM,9:29,9.4,Andrew Kelley:26-WS-KELLEY-9829 E ONZA DR-DOOR MOD-333-26-WS- KELLEY-9829 E ONZA DR-DOOR MOD-333,GC,,,,,,,,,,,,
-punch,Brandon Hermaszewski,11/18/2026,7:47 AM,2:36 PM,6:49,6.8,Andrew Kelley:26-WS-KELLEY-9829 E ONZA DR-DOOR MOD-333-26-WS- KELLEY-9829 E ONZA DR-DOOR MOD-333,GC,,,,,,,,,,,,
-punch,Brandon Hermaszewski,11/19/2026,7:10 AM,3:54 PM,8:44,8.7,Andrew Kelley:26-WS-KELLEY-9829 E ONZA DR-DOOR MOD-333-26-WS- KELLEY-9829 E ONZA DR-DOOR MOD-333,GC,,,,,,,,,,,,
-punch,Brandon Hermaszewski,11/20/2026,7:00 AM,12:07 PM,5:07,5.1,Andrew Kelley:26-WS-KELLEY-9829 E ONZA DR-DOOR MOD-333-26-WS- KELLEY-9829 E ONZA DR-DOOR MOD-333,GC,,,,,,,,,,,,
+punch,Brandon Hermaszewski,11/16/2026,7:19 AM,4:07 PM,8:48,8.8,Andrew Kelley:26-WS-KELLEY-9829 E ONZA DR-DOOR MOD-333-26-WS- KELLEY-9829 E ONZA DR-DOOR MOD-333,WD,,,,,,,,,,,,
+punch,Brandon Hermaszewski,11/17/2026,6:54 AM,4:23 PM,9:29,9.4,Andrew Kelley:26-WS-KELLEY-9829 E ONZA DR-DOOR MOD-333-26-WS- KELLEY-9829 E ONZA DR-DOOR MOD-333,WD,,,,,,,,,,,,
+punch,Brandon Hermaszewski,11/18/2026,7:47 AM,2:36 PM,6:49,6.8,Andrew Kelley:26-WS-KELLEY-9829 E ONZA DR-DOOR MOD-333-26-WS- KELLEY-9829 E ONZA DR-DOOR MOD-333,WD,,,,,,,,,,,,
+punch,Brandon Hermaszewski,11/19/2026,7:10 AM,3:54 PM,8:44,8.7,Andrew Kelley:26-WS-KELLEY-9829 E ONZA DR-DOOR MOD-333-26-WS- KELLEY-9829 E ONZA DR-DOOR MOD-333,WD,,,,,,,,,,,,
+punch,Brandon Hermaszewski,11/20/2026,7:00 AM,12:07 PM,5:07,5.1,Andrew Kelley:26-WS-KELLEY-9829 E ONZA DR-DOOR MOD-333-26-WS- KELLEY-9829 E ONZA DR-DOOR MOD-333,WD,,,,,,,,,,,,
 punch,Brecken Bogle,11/18/2026,8:47 AM,12:41 PM,3:54,3.9,Anthony Arnold:26-GC-Tony Arnold_15756 N 115th Way_Plumbing -007,GC,yes,,,,,,,,,,excluded,Not paid. Contractor wrote the homeowner paid cash. HO paid me in cash. No need to pay me for this job.
 punch,Brecken Bogle,11/16/2026,7:31 AM,3:32 PM,7:22,7.3,Buskirk Residence:Buskirk Residence:26-GC-BUSKIRK-SMALL CHIMNEY AREA-8009 N 66th St,GC,yes,,,,,,,,,,,
 punch,Brecken Bogle,11/18/2026,12:41 PM,3:08 PM,2:27,2.4,"Neutra Design Studio, Daniella Danyals, Designer:Neutra Design Studio:26- GC-ADAM ESTOCLAT-HRLY-007-4601 E Cholla St., PHX 85028",GC,yes,,,,,,,,,,,
