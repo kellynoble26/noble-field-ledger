@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Assurity is always a deduction. Net payable = wages + reimbursements + Thanksgiving bonus + note bonus + additional lines − Assurity. Never add Assurity to net. This applies to every contractor and to the week total. A contractor with no Assurity stays at $0. Matthew Laush has no Assurity. Do not invent an Assurity amount. Show every Assurity amount as a minus. Do not leave a positive Assurity figure that a reader could add into the net. Assurity is only for contractors who are enrolled, not everyone.
+# Assurity is always a deduction. Net payable = wages + fuel/mileage/reimbursement + Thanksgiving bonus + piecework bonus + additional lines − Assurity. Never add Assurity to net. This applies to every contractor and to the week total. A contractor with no Assurity stays at $0. Matthew Laush has no Assurity. Do not invent an Assurity amount. Show every Assurity amount as a minus. Do not leave a positive Assurity figure that a reader could add into the net. Assurity is only for contractors who are enrolled, not everyone. Fuel/mileage/reimbursement is the header for mileage and fuel. It is not called a reimbursement. Piecework bonus is the header for the amount a contractor wrote on a punch. Thanksgiving bonus stays Thanksgiving bonus.
 # 26-GC hours are GC hours. Do not show them as a separate total, column, or subtotal. They are already inside GC.
 """Test review for pay week 11/16/2026–11/22/2026.
 
@@ -62,7 +62,7 @@ ASSURITY_NOTE = {
 # Jose Carranza's $50 was a one-time stipend for the distance of that project.
 # It is not paid on this week. Andy Gomez's stipend stays.
 FUEL = {"Andy Gomez": 50.0}
-# This week only. A separate amount, not wages and not a reimbursement.
+# This week only. A separate amount, not wages and not fuel or mileage.
 # George Piekarski has no rate, so his wages stay None and he does not receive it.
 # Nicholas Sommer is not on this review.
 THANKSGIVING_BONUS = 100.0
@@ -331,7 +331,7 @@ def load_punches():
                 flags.append("Long punch. Clock time is counted. See the note.")
             if NOTE_BONUS_RE.search(note_s) and who in NOTE_BONUS_NAMES:
                 flags.append(
-                    "Note bonus is included as its own line. Separate from the Thanksgiving bonus."
+                    "Piecework bonus is included as its own line. Separate from the Thanksgiving bonus."
                 )
             elif re.search(r"billable|bill one hour|bonus|\$35", note_s, re.I):
                 flags.append("Note mentions pay or a customer price. Not added to the net.")
@@ -576,7 +576,7 @@ def manual_copy(line, person):
         f"Net is {money(person['net'])}. "
         f"Assurity deduction {deduction(person['assurity'])}. "
         f"Thanksgiving bonus stays {money(person['bonus'])}. "
-        "No note bonus and no fuel stipend."
+        "No piecework bonus and no fuel stipend."
     )
 
 
@@ -764,14 +764,14 @@ def additional_pay(punches):
         f"The note says: {paulina['note']}. "
         "Rate $35.00. Wages $157.50. Net $157.50. "
         "Bucket additional, not WD and not GC. "
-        "No Assurity, no fuel, no mileage, no Thanksgiving bonus, and no note bonus."
+        "No Assurity, no fuel, no mileage, no Thanksgiving bonus, and no piecework bonus."
     )
     esias_note = (
         "Additional line. Not ClockShark wages and not in Angel Soto Moya’s net. "
         "Hours are 20.7, already converted, and are not converted again. "
         "Rate $15.00. Wages $310.50. Net $310.50. "
         "Bucket additional, not WD and not GC. "
-        "No Assurity, no fuel, no mileage, no Thanksgiving bonus, and no note bonus. "
+        "No Assurity, no fuel, no mileage, no Thanksgiving bonus, and no piecework bonus. "
         "Angel Soto Moya’s punches that say Esias was there the same time stay on his timesheet. "
         "These hours are not added to his WD, GC, wages, or net."
     )
@@ -928,6 +928,13 @@ def main():
             f"company hours WD {sum_wd_hours} {sum_wd_wages} "
             f"GC {sum_gc_hours} {sum_gc_wages} 26-GC {sum_gc26_hours}"
         )
+    # Paid hours already on the page. George Piekarski is not in clock.
+    # Additional lines are not in clock. Do not invent a third hour total.
+    sum_paid_hours = q1(Decimal(str(sum_wd_hours)) + Decimal(str(sum_gc_hours)))
+    if abs(sum_paid_hours - (sum_wd_hours + sum_gc_hours)) > 0.05:
+        raise SystemExit(
+            f"paid hours {sum_paid_hours} != WD {sum_wd_hours} + GC {sum_gc_hours}"
+        )
     george = next(p for p in people if p["name"] == "George Piekarski")
     if george["wages"] is not None or george["wd"] is not None or george.get("wd_wages"):
         raise SystemExit("George Piekarski is in a company total")
@@ -1036,7 +1043,8 @@ def main():
     )
     print(
         f"WD hours {sum_wd_hours:.1f} wages {sum_wd_wages:.2f} "
-        f"GC hours {sum_gc_hours:.1f} wages {sum_gc_wages:.2f}"
+        f"GC hours {sum_gc_hours:.1f} wages {sum_gc_wages:.2f} "
+        f"paid hours {sum_paid_hours:.1f}"
     )
     print(f"MANUAL {manual_copy(manual, kelly)}")
     print("bonus recipients:", ", ".join(recipients))
@@ -1080,9 +1088,9 @@ def main():
         "wages",
         "mileage",
         "fuel",
-        "reimbursements",
+        "Fuel/mileage/reimbursement",
         "thanksgiving_bonus",
-        "note_bonus",
+        "Piecework bonus",
         "assurity_deduction",
         "net_payable",
         "notes",
@@ -1103,7 +1111,7 @@ def main():
             if evidence:
                 item = evidence[0]
                 extra = (
-                    f"Note bonus {p['note_bonus']:.2f} is included in the net as its own line. "
+                    f"Piecework bonus {p['note_bonus']:.2f} is included in the net as its own line. "
                     "Separate from the Thanksgiving bonus. "
                     f"{item['date']} {item['in']}–{item['out']}. {item['note']}"
                 )
@@ -1169,12 +1177,26 @@ def main():
                     ]
                 )
         company_note = (
-            "Company wages only. Thanksgiving bonus, note bonus, and reimbursements "
-            "are week totals and are not included. The Assurity deduction is subtracted "
-            "from net payable and is not company wages. "
-            "George Piekarski is not included. Paulina and Esias stay additional. "
+            "Company wages only. Fuel/mileage/reimbursement, Thanksgiving bonus, "
+            "piecework bonus, and Assurity are not split by company. They are on the week row. "
+            "The Assurity deduction is subtracted from net payable and is not company wages. "
+            "George Piekarski is not included. Paulina and Esias stay additional and are not "
+            "in the company wage cells. "
             "Contractor Kelly Renner’s manual line, Friday 11/20/2026, forgot to clock in, "
             "13.0 hours, is included in GC."
+        )
+        week_note = (
+            "Week row under WD and GC. Hours are the WD hours plus the GC hours already "
+            f"on the page ({sum_wd_hours:.1f} + {sum_gc_hours:.1f} = {sum_paid_hours:.1f}). "
+            "George Piekarski is not included. "
+            f"Fuel/mileage/reimbursement {sum_reimb:.2f}. "
+            f"Thanksgiving bonus {sum_bonus:.2f}. "
+            f"Piecework bonus {sum_note:.2f}. "
+            f"Wages {sum_wages:.2f}. "
+            f"Assurity deduction {deduction_csv(sum_assur)}. "
+            "Additional lines stay additional and are not in the wage cell. "
+            f"Net payable {sum_net:.2f} is wages + fuel/mileage/reimbursement + "
+            "Thanksgiving bonus + piecework bonus + additional lines − Assurity."
         )
         w.writerow(
             [
@@ -1228,6 +1250,33 @@ def main():
                 "",
                 "",
                 company_note,
+            ]
+        )
+        w.writerow(
+            [
+                "company",
+                "Week",
+                "",
+                "",
+                "",
+                "",
+                f"{sum_paid_hours:.1f}",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                f"{sum_wages:.2f}",
+                "",
+                "",
+                f"{sum_reimb:.2f}",
+                f"{sum_bonus:.2f}",
+                f"{sum_note:.2f}",
+                deduction_csv(sum_assur),
+                "",
+                week_note,
             ]
         )
         for p in people:
@@ -1322,7 +1371,7 @@ def main():
                 for item in p["note_bonus_evidence"]
             )
             bits.append(
-                f"<p><b>Note bonus {money(p['note_bonus'])}.</b> "
+                f"<p><b>Piecework bonus {money(p['note_bonus'])}.</b> "
                 "Included in the net as its own line. Separate from the Thanksgiving bonus.</p>"
                 f"<ul>{items}</ul>"
             )
@@ -1336,7 +1385,7 @@ def main():
             bits.append(f"<p>Fuel stipend {money(p['fuel'])}.</p>")
         bits.append(f"<p>Thanksgiving bonus {money(p['bonus'])}.</p>")
         if not p.get("note_bonus_evidence"):
-            bits.append(f"<p>Note bonus {money(p['note_bonus'])}.</p>")
+            bits.append(f"<p>Piecework bonus {money(p['note_bonus'])}.</p>")
         if p.get("manual_line"):
             bits.append(
                 "<p><b>Manual line.</b> "
@@ -1418,8 +1467,8 @@ def main():
                     f"WD {p['wd']:.1f} · WD wages {money(p['wd_wages'])} · "
                     f"GC {p['gc']:.1f} · GC wages {money(p['gc_wages'])} · "
                     f"rate {money(p['rate']) if p['rate'] is not None else '—'} · wages {money(p['wages'])} · "
-                    f"reimbursements {money(p['reimb'])} · Thanksgiving bonus {money(p['bonus'])} · "
-                    f"Note bonus {money(p['note_bonus'])} · "
+                    f"Fuel/mileage/reimbursement {money(p['reimb'])} · Thanksgiving bonus {money(p['bonus'])} · "
+                    f"Piecework bonus {money(p['note_bonus'])} · "
                     f"Assurity deduction {deduction(p['assurity'])} · net {money(p['net'])}"
                     + (
                         f". Includes a manual line: {p['manual_line']['label']}."
@@ -1495,24 +1544,24 @@ ul {{ margin: 4px 0 8px 18px; }}
 <div class="banner">TEST ONLY · DO NOT MERGE · DO NOT DEPLOY · This week is not on the live site.</div>
 <h1>Noble Field Ledger — test review, 11/16/2026 through 11/22/2026</h1>
 <p>ClockShark job-detail report and timesheet, both run 11/23/2026 at 8:43–8:48 AM Arizona time. Noble General Contracting (GC) and Noble Windows &amp; Doors (WD). Not a payment.</p>
-<p>Each contractor section is the timesheet: job, then the hours for 11/16 through 11/22. Under each job are the notes from the job-detail punches that make those hours. Day columns stay in hours and minutes, the same way the timesheet prints them. Pay uses each punch’s own tenth, then adds those tenths. Every contractor’s raw week total matches the timesheet. Breaks are already out of the ClockShark total. Net payable = ClockShark wages + reimbursements + Thanksgiving bonus + note bonus + additional lines − Assurity. Assurity is always a deduction. The summary column is Assurity deduction and each amount is a minus. Never add Assurity to a contractor’s net or to the week total. No income tax. ClockShark wages are the timesheet wages plus the manual line for contractor Kelly Renner: Friday 11/20/2026, forgot to clock in, 13.0 hours. Her ClockShark punches stay as they are. 13.0 is already a tenth. The note bonus and the two additional lines are not in that wages total. They are added into net payable.</p>
-<p>Thanksgiving bonus is {money(THANKSGIVING_BONUS)} for each contractor on this week except George Piekarski and Nicholas Sommer. It is not wages and not a reimbursement. Exceptional Cleaning Services/Paulina Moya and Angel Soto - Helper Esias do not receive it.</p>
-<p>Note bonus is the amount a contractor wrote on a punch, paid as its own line. It is not the Thanksgiving bonus and it is not wages. Nicholas Sturgeon {money(note_bonus_amounts['Nicholas Sturgeon'])} from his {e(note_bonus_evidence['Nicholas Sturgeon'][0]['date'])} note. Joe Orona {money(note_bonus_amounts['Joe Orona'])} from his {e(note_bonus_evidence['Joe Orona'][0]['date'])} note. Every other calculated contractor is $0.00. George Piekarski, Nicholas Sommer, Exceptional Cleaning Services/Paulina Moya, and Angel Soto - Helper Esias do not receive a note bonus.</p>
-<p>Additional lines, each on its own row after Angel Soto Moya, bucket additional, not WD and not GC. Exceptional Cleaning Services/Paulina Moya: raw 4:34 converted to 4.5 at $35.00 = {money(extras[0]['wages'])}. Angel Soto - Helper Esias: 20.7 hours, already converted, at $15.00 = {money(extras[1]['wages'])}. No Assurity, no fuel, no mileage, no Thanksgiving bonus, and no note bonus. Neither amount is in Angel Soto Moya’s hours, wages, or net.</p>
-<p><b>Wages {money(sum_wages)}. Reimbursements {money(sum_reimb)}. Thanksgiving bonus {money(sum_bonus)}. Note bonus {money(sum_note)}. Additional lines {money(sum_additional)}. Assurity deduction {deduction(sum_assur)}. Net payable {money(sum_net)}.</b> Net payable = {money(sum_wages)} + {money(sum_reimb)} + {money(sum_bonus)} + {money(sum_note)} + {money(extras[0]['wages'])} + {money(extras[1]['wages'])} + ({deduction(sum_assur)}) = {money(sum_net)}.</p>
-<p><b>WD total {sum_wd_hours:.1f} hours, {money(sum_wd_wages)}. GC total {sum_gc_hours:.1f} hours, {money(sum_gc_wages)}.</b> Thanksgiving bonus, note bonus, and reimbursements stay week totals and are not company wages. The Assurity deduction is subtracted from net payable and is not company wages.</p>
+<p>Each contractor section is the timesheet: job, then the hours for 11/16 through 11/22. Under each job are the notes from the job-detail punches that make those hours. Day columns stay in hours and minutes, the same way the timesheet prints them. Pay uses each punch’s own tenth, then adds those tenths. Every contractor’s raw week total matches the timesheet. Breaks are already out of the ClockShark total. Net payable = ClockShark wages + fuel/mileage/reimbursement + Thanksgiving bonus + piecework bonus + additional lines − Assurity. Assurity is always a deduction. The summary column is Assurity deduction and each amount is a minus. Never add Assurity to a contractor’s net or to the week total. No income tax. ClockShark wages are the timesheet wages plus the manual line for contractor Kelly Renner: Friday 11/20/2026, forgot to clock in, 13.0 hours. Her ClockShark punches stay as they are. 13.0 is already a tenth. The piecework bonus and the two additional lines are not in that wages total. They are added into net payable.</p>
+<p>Thanksgiving bonus is {money(THANKSGIVING_BONUS)} for each contractor on this week except George Piekarski and Nicholas Sommer. It is not wages and it is not fuel or mileage. Exceptional Cleaning Services/Paulina Moya and Angel Soto - Helper Esias do not receive it.</p>
+<p>Piecework bonus is the amount a contractor wrote on a punch, paid as its own line. It is not the Thanksgiving bonus and it is not wages. Nicholas Sturgeon {money(note_bonus_amounts['Nicholas Sturgeon'])} from his {e(note_bonus_evidence['Nicholas Sturgeon'][0]['date'])} note. Joe Orona {money(note_bonus_amounts['Joe Orona'])} from his {e(note_bonus_evidence['Joe Orona'][0]['date'])} note. Every other calculated contractor is $0.00. George Piekarski, Nicholas Sommer, Exceptional Cleaning Services/Paulina Moya, and Angel Soto - Helper Esias do not receive a piecework bonus.</p>
+<p>Additional lines, each on its own row after Angel Soto Moya, bucket additional, not WD and not GC. Exceptional Cleaning Services/Paulina Moya: raw 4:34 converted to 4.5 at $35.00 = {money(extras[0]['wages'])}. Angel Soto - Helper Esias: 20.7 hours, already converted, at $15.00 = {money(extras[1]['wages'])}. No Assurity, no fuel, no mileage, no Thanksgiving bonus, and no piecework bonus. Neither amount is in Angel Soto Moya’s hours, wages, or net.</p>
+<p><b>Wages {money(sum_wages)}. Fuel/mileage/reimbursement {money(sum_reimb)}. Thanksgiving bonus {money(sum_bonus)}. Piecework bonus {money(sum_note)}. Additional lines {money(sum_additional)} (Paulina {money(extras[0]['wages'])} and Esias {money(extras[1]['wages'])}). Assurity deduction {deduction(sum_assur)}. Net payable {money(sum_net)}.</b> Net payable = wages {money(sum_wages)} + fuel/mileage/reimbursement {money(sum_reimb)} + Thanksgiving {money(sum_bonus)} + piecework bonus {money(sum_note)} + additional lines {money(sum_additional)} (Paulina {money(extras[0]['wages'])} and Esias {money(extras[1]['wages'])}) − Assurity {money(sum_assur)} = net payable {money(sum_net)}.</p>
+<p><b>WD total {sum_wd_hours:.1f} hours, {money(sum_wd_wages)}. GC total {sum_gc_hours:.1f} hours, {money(sum_gc_wages)}.</b> Fuel/mileage/reimbursement, Thanksgiving bonus, and piecework bonus are week totals. They are not split by company. Assurity is a deduction on the week row and is not company wages. Additional lines stay additional and are not in these wage cells.</p>
 <table>
-<thead><tr><th>Contractor</th><th>Raw</th><th>WD hours</th><th>WD wages</th><th>GC hours</th><th>GC wages</th><th>Rate</th><th>Wages</th><th>Reimbursements</th><th>Thanksgiving bonus</th><th>Note bonus</th><th>Assurity deduction</th><th>Net payable</th></tr></thead>
+<thead><tr><th>Company</th><th>Hours</th><th>Fuel/mileage/reimbursement</th><th>Thanksgiving bonus</th><th>Piecework bonus</th><th>Wages</th><th>Assurity</th></tr></thead>
+<tbody>
+<tr><td>WD · Noble Windows &amp; Doors</td><td class="num">{sum_wd_hours:.1f}</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">{money(sum_wd_wages)}</td><td class="num">—</td></tr>
+<tr><td>GC · Noble General Contracting</td><td class="num">{sum_gc_hours:.1f}</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">{money(sum_gc_wages)}</td><td class="num">—</td></tr>
+<tr class="total"><td>Week</td><td class="num">{sum_paid_hours:.1f}</td><td class="num">{money(sum_reimb)}</td><td class="num">{money(sum_bonus)}</td><td class="num">{money(sum_note)}</td><td class="num">{money(sum_wages)}</td><td class="num">{deduction(sum_assur)}</td></tr>
+</tbody></table>
+<table>
+<thead><tr><th>Contractor</th><th>Raw</th><th>WD hours</th><th>WD wages</th><th>GC hours</th><th>GC wages</th><th>Rate</th><th>Wages</th><th>Fuel/mileage/reimbursement</th><th>Thanksgiving bonus</th><th>Piecework bonus</th><th>Assurity deduction</th><th>Net payable</th></tr></thead>
 <tbody>
 {''.join(rows)}
 <tr class="total"><td>Week total</td><td></td><td class="num">{sum_wd_hours:.1f}</td><td class="num">{money(sum_wd_wages)}</td><td class="num">{sum_gc_hours:.1f}</td><td class="num">{money(sum_gc_wages)}</td><td></td><td class="num">{money(sum_wages)}</td><td class="num">{money(sum_reimb)}</td><td class="num">{money(sum_bonus)}</td><td class="num">{money(sum_note)}</td><td class="num">Assurity deduction {deduction(sum_assur)}</td><td class="num">{money(sum_net)}</td></tr>
-</tbody></table>
-<table>
-<thead><tr><th>Company</th><th>Hours</th><th>Wages</th></tr></thead>
-<tbody>
-<tr><td>WD · Noble Windows &amp; Doors</td><td class="num">{sum_wd_hours:.1f}</td><td class="num">{money(sum_wd_wages)}</td></tr>
-<tr><td>GC · Noble General Contracting</td><td class="num">{sum_gc_hours:.1f}</td><td class="num">{money(sum_gc_wages)}</td></tr>
-<tr class="total"><td>ClockShark wages</td><td></td><td class="num">{money(sum_wages)}</td></tr>
 </tbody></table>
 <h2>Read these before the detail</h2>
 <ul>
@@ -1520,7 +1569,7 @@ ul {{ margin: 4px 0 8px 18px; }}
 <li>WD wages are WD hours times that contractor’s rate. GC wages are GC hours times the same rate. Combined wages equal WD wages plus GC wages.</li>
 <li>A customer price in a note ($85 an hour, a $275 trip) is not a pay rate.</li>
 <li>Brecken Bogle’s 3:54 on Tony Arnold is left out of pay. He wrote that the homeowner paid cash. Jose Carranza’s 6:55 on 11/20/2026 on Tony Arnold is left out of pay. Kelly said the homeowner paid cash. Jose Carranza’s $50 fuel stipend was a one-time stipend for the distance of that project and is not paid this week. Andy Gomez’s $50 fuel stipend stays.</li>
-<li>Notes that ask for a bonus are included as their own lines, separate from the Thanksgiving bonus: Nicholas Sturgeon {money(note_bonus_amounts['Nicholas Sturgeon'])}, Joe Orona {money(note_bonus_amounts['Joe Orona'])}. Those amounts are in each contractor’s net. Angel Soto Moya’s 11/19/2026 note on the 4:34 cleaning punch says Paulina $35hr. That pay is the additional line for Exceptional Cleaning Services/Paulina Moya, raw 4:34 converted to 4.5 at $35.00, $157.50. Angel Soto - Helper Esias is 20.7 hours at $15.00, $310.50. Both are separate lines and are not in Angel’s net.</li>
+<li>Piecework bonus is the amount a contractor wrote on a punch, paid as its own line, separate from the Thanksgiving bonus: Nicholas Sturgeon {money(note_bonus_amounts['Nicholas Sturgeon'])}, Joe Orona {money(note_bonus_amounts['Joe Orona'])}. Those amounts are in each contractor’s net. Angel Soto Moya’s 11/19/2026 note on the 4:34 cleaning punch says Paulina $35hr. That pay is the additional line for Exceptional Cleaning Services/Paulina Moya, raw 4:34 converted to 4.5 at $35.00, $157.50. Angel Soto - Helper Esias is 20.7 hours at $15.00, $310.50. Both are separate lines and are not in Angel’s net.</li>
 <li>26-WS on Andrew Kelley is WD. It is an active Windows &amp; Doors project. Shaw Butte is WD.</li>
 <li>Eric Havins is all WD, including Noble Office. Noble W&amp;D shop time is WD. 26-KB (Mark Kampf) stays GC.</li>
 <li>Contractor Kelly Renner forgot to clock in on Friday 11/20/2026. {e(manual_copy(manual, kelly))}</li>
