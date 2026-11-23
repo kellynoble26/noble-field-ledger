@@ -294,6 +294,12 @@ def load_punches():
             if "no need to pay" in note_s.lower() or "paid me in cash" in note_s.lower():
                 exclude = True
                 flags.append("Not paid. Contractor wrote the homeowner paid cash.")
+            # Kelly: the homeowner paid Jose cash for 11/20/2026. His ClockShark
+            # note does not say cash, so every punch that day is still left out of pay.
+            if who == "Jose Carranza" and (mdate.group(0) if mdate else "") == "11/20/2026":
+                exclude = True
+                if not any(flag.startswith("Not paid.") for flag in flags):
+                    flags.append("Not paid. Homeowner paid cash.")
             if minutes == 1:
                 flags.append("0:01 counts as 0.0 and stays on the list.")
             if minutes >= 14 * 60:
@@ -748,7 +754,7 @@ def main():
                 f"{name} Thanksgiving {person['bonus']} note bonus {person['note_bonus']}"
             )
     if (
-        abs(sum_wages - 24300.30) > 0.001
+        abs(sum_wages - 24127.80) > 0.001
         or abs(sum_reimb - 632.76) > 0.001
         or abs(sum_bonus - 1900.00) > 0.001
         or abs(sum_additional - 468.00) > 0.001
@@ -759,11 +765,11 @@ def main():
             f"additional {sum_additional} assurity {sum_assur}"
         )
     prior_net = q2(sum_wages + sum_reimb + sum_bonus + sum_additional - sum_assur)
-    if abs(prior_net - 26905.74) > 0.001:
+    if abs(prior_net - 26733.24) > 0.001:
         raise SystemExit(f"base net moved {prior_net}")
     if abs(sum_net - q2(prior_net + sum_note)) > 0.001:
         raise SystemExit(f"net {sum_net} != {prior_net} + note bonus {sum_note}")
-    if abs(sum_net - 27155.74) > 0.001:
+    if abs(sum_net - 26983.24) > 0.001:
         raise SystemExit(f"net payable changed {sum_net}")
     for p in clock:
         if p["gc26"] - p["gc"] > 0.001:
@@ -779,6 +785,17 @@ def main():
         )
     if sum_gc26_hours - sum_gc_hours > 0.001:
         raise SystemExit(f"26-GC {sum_gc26_hours} is outside GC {sum_gc_hours}")
+    if (
+        abs(sum_wd_hours - 215.2) > 0.001
+        or abs(sum_wd_wages - 7596.50) > 0.001
+        or abs(sum_gc_hours - 504.9) > 0.001
+        or abs(sum_gc_wages - 16531.30) > 0.001
+        or abs(sum_gc26_hours - 341.2) > 0.001
+    ):
+        raise SystemExit(
+            f"company hours WD {sum_wd_hours} {sum_wd_wages} "
+            f"GC {sum_gc_hours} {sum_gc_wages} 26-GC {sum_gc26_hours}"
+        )
     george = next(p for p in people if p["name"] == "George Piekarski")
     if george["wages"] is not None or george["wd"] is not None or george.get("wd_wages"):
         raise SystemExit("George Piekarski is in a company total")
@@ -791,6 +808,32 @@ def main():
         raise SystemExit(f"Nicholas note bonus changed {nicholas['note_bonus']} {nicholas['net']}")
     if joe["note_bonus"] != 100 or abs(joe["net"] - 1822.40) > 0.001:
         raise SystemExit(f"Joe note bonus changed {joe['note_bonus']} {joe['net']}")
+    jose = next(p for p in people if p["name"] == "Jose Carranza")
+    jose_cash = [punch for punch in jose["punches"] if punch["date"] == "11/20/2026"]
+    if (
+        len(jose_cash) != 1
+        or jose_cash[0]["raw"] != "6:55"
+        or jose_cash[0]["units"] != 69
+        or not jose_cash[0]["exclude"]
+        or jose_cash[0]["bucket"] != "GC"
+        or not jose_cash[0]["gc26"]
+    ):
+        raise SystemExit(f"Jose 11/20 cash punch changed {jose_cash}")
+    if any(punch["exclude"] for punch in jose["punches"] if punch["date"] != "11/20/2026"):
+        raise SystemExit("A Jose punch other than 11/20 was left out of pay")
+    if (
+        jose["wd"] != 0.0
+        or abs(jose["gc"] - 28.3) > 0.001
+        or abs(jose["gc26"] - 28.3) > 0.001
+        or abs(jose["wages"] - 707.50) > 0.001
+        or jose["fuel"] != 50.0
+        or jose["bonus"] != THANKSGIVING_BONUS
+        or jose["note_bonus"] != 0.0
+        or abs(jose["net"] - 857.50) > 0.001
+    ):
+        raise SystemExit(
+            f"Jose pay changed WD {jose['wd']} GC {jose['gc']} wages {jose['wages']} net {jose['net']}"
+        )
     print(
         f"punches {len(punches)} wages {sum_wages:.2f} reimb {sum_reimb:.2f} "
         f"bonus {sum_bonus:.2f} ({len(recipients)}) note {sum_note:.2f} "
@@ -1099,6 +1142,9 @@ def main():
             for punch in plist:
                 note = punch["note"] or "No note on this punch."
                 mark = " Not paid." if punch["exclude"] else ""
+                if punch["exclude"] and not punch["note"]:
+                    note = " ".join(punch["flags"]) or "Not paid."
+                    mark = ""
                 converted = "" if p["missing_rate"] else f" → {punch['units'] / 10:.1f}"
                 sheet_rows.append(
                     "<tr class='punch-note'><td colspan='10'>"
@@ -1209,7 +1255,7 @@ ul {{ margin: 4px 0 8px 18px; }}
 <li>George Piekarski and Nicholas Sommer are not calculated. George’s 73:45 stays on his timesheet with the job-detail notes, including the 20:12 punch, the 0:23 punch, the 23:00 punch, and the 11:27 overnight punch. Those hours are in neither the WD total nor the GC total. Nicholas Sommer has no punches and is not on this review.</li>
 <li>WD wages are WD hours times that contractor’s rate. GC wages are GC hours times the same rate. Combined wages equal WD wages plus GC wages. 26-GC hours are inside GC.</li>
 <li>A customer price in a note ($85 an hour, a $275 trip) is not a pay rate.</li>
-<li>Brecken Bogle’s 3:54 on Tony Arnold is left out of pay. He wrote that the homeowner paid cash.</li>
+<li>Brecken Bogle’s 3:54 on Tony Arnold is left out of pay. He wrote that the homeowner paid cash. Jose Carranza’s 6:55 on 11/20/2026 on Tony Arnold is left out of pay. Kelly said the homeowner paid cash.</li>
 <li>Notes that ask for a bonus are included as their own lines, separate from the Thanksgiving bonus: Nicholas Sturgeon {money(note_bonus_amounts['Nicholas Sturgeon'])}, Joe Orona {money(note_bonus_amounts['Joe Orona'])}. Those amounts are in each contractor’s net. Angel Soto Moya’s 11/19/2026 note on the 4:34 cleaning punch says Paulina $35hr. That pay is the additional line for Exceptional Cleaning Services/Paulina Moya, raw 4:34 converted to 4.5 at $35.00, $157.50. Angel Soto - Helper Esias is 20.7 hours at $15.00, $310.50. Both are separate lines and are not in Angel’s net.</li>
 <li>26-WS on Andrew Kelley is WD. It is an active Windows &amp; Doors project. Shaw Butte is WD.</li>
 <li>Eric Havins is all WD, including Noble Office. Noble W&amp;D shop time is WD. 26-KB (Mark Kampf) stays GC.</li>
@@ -1219,7 +1265,7 @@ ul {{ margin: 4px 0 8px 18px; }}
 </ul>
 {''.join(details)}
 <section class="person"><h2>Projects</h2>
-<p>Hours are the sum of each paid punch’s tenth. The cash Tony Arnold punch is not in this table.</p>
+<p>Hours are the sum of each paid punch’s tenth. The cash Tony Arnold punches are not in this table.</p>
 <table><thead><tr><th>Project</th><th>Bucket</th><th>Punches</th><th>Hours</th><th>of which 26-GC</th><th>Wages</th><th>Contractors</th></tr></thead>
 <tbody>{''.join(job_rows)}</tbody></table>
 </section>
